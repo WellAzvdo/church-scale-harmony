@@ -9,7 +9,7 @@ import { Schedule, Member, Department } from '@/lib/models';
 import * as storage from '@/lib/storage';
 import ScheduleForm from '@/components/schedules/ScheduleForm';
 import { format, parseISO } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale/pt-BR';
 import { 
   Popover,
   PopoverContent,
