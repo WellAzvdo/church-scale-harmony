@@ -1,20 +1,31 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from '@/contexts/AuthContext';
 import { generateId } from '@/lib/scheduleUtils';
-import { User, UserRole } from '@/lib/models';
+import { User, UserRole, ApprovalStatus } from '@/lib/models';
 import * as storage from '@/lib/storage';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notification, setNotification] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated } = useAuth();
+  
+  // Display notification if redirected with a message
+  useEffect(() => {
+    if (location.state?.message) {
+      setNotification(location.state.message);
+    }
+  }, [location]);
   
   // Redirect if already authenticated
   useEffect(() => {
@@ -33,7 +44,13 @@ const Login: React.FC = () => {
           const adminUser: User = {
             id: generateId(),
             username: 'admin',
+            password: 'admin', // In a real app, this would be hashed
             role: UserRole.ADMIN,
+            approvalStatus: ApprovalStatus.APPROVED,
+            securityQuestion: {
+              question: 'Qual é o nome do sistema?',
+              answer: 'igreja app'
+            },
             createdAt: Date.now(),
             updatedAt: Date.now(),
             syncStatus: 'synced'
@@ -85,6 +102,13 @@ const Login: React.FC = () => {
           <p className="text-gray-600 mt-2">Gerenciamento de Escalas</p>
         </div>
         
+        {notification && (
+          <Alert className="mb-4 bg-blue-50 text-blue-700 border-blue-200">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{notification}</AlertDescription>
+          </Alert>
+        )}
+        
         <form onSubmit={handleLogin} className="space-y-6">
           {error && (
             <div className="bg-red-100 p-3 rounded-md text-red-700 text-sm">
@@ -108,9 +132,14 @@ const Login: React.FC = () => {
           </div>
           
           <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-gray-700">
-              Senha
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="password" className="text-sm font-medium text-gray-700">
+                Senha
+              </label>
+              <Link to="/reset-password" className="text-xs text-primary hover:underline">
+                Esqueceu sua senha?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
@@ -129,6 +158,15 @@ const Login: React.FC = () => {
           >
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
+          
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-600">
+              Ainda não tem uma conta?{" "}
+              <Link to="/register" className="text-primary hover:underline">
+                Registre-se
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </div>

@@ -1,5 +1,6 @@
+
 import { Preferences } from '@capacitor/preferences';
-import { Member, Department, Position, Schedule, EntityType, User } from './models';
+import { Member, Department, Position, Schedule, EntityType, User, ApprovalStatus } from './models';
 
 // Key prefixes for different entities in storage
 const STORAGE_KEYS = {
@@ -162,6 +163,59 @@ export async function setCurrentUser(user: User): Promise<void> {
 
 export async function clearCurrentUser(): Promise<void> {
   await Preferences.remove({ key: STORAGE_KEYS.CURRENT_USER });
+}
+
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const users = await getUsers();
+  return users.find(user => user.username === username) || null;
+}
+
+export async function checkUsernameExists(username: string): Promise<boolean> {
+  const user = await getUserByUsername(username);
+  return !!user;
+}
+
+export async function getPendingUsers(): Promise<User[]> {
+  const users = await getUsers();
+  return users.filter(user => user.approvalStatus === ApprovalStatus.PENDING);
+}
+
+export async function approveUser(userId: string): Promise<void> {
+  const users = await getUsers();
+  const userIndex = users.findIndex(u => u.id === userId);
+  
+  if (userIndex >= 0) {
+    users[userIndex].approvalStatus = ApprovalStatus.APPROVED;
+    await setData(STORAGE_KEYS.USERS, users);
+  }
+}
+
+export async function rejectUser(userId: string): Promise<void> {
+  const users = await getUsers();
+  const userIndex = users.findIndex(u => u.id === userId);
+  
+  if (userIndex >= 0) {
+    users[userIndex].approvalStatus = ApprovalStatus.REJECTED;
+    await setData(STORAGE_KEYS.USERS, users);
+  }
+}
+
+export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
+  // In a real app, this would hash the password
+  // For demo purposes, we're just storing it directly (not secure)
+  const users = await getUsers();
+  const userIndex = users.findIndex(u => u.id === userId);
+  
+  if (userIndex >= 0) {
+    // In a real app, you would store a password hash, not the actual password
+    // For demo purposes we're storing it as a separate field
+    users[userIndex] = {
+      ...users[userIndex],
+      password: newPassword,
+      updatedAt: Date.now()
+    };
+    await setData(STORAGE_KEYS.USERS, users);
+  }
 }
 
 // Notifications

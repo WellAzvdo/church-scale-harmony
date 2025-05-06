@@ -55,6 +55,8 @@ export interface User {
   memberId?: string; // Optional link to a member
   role: UserRole;
   departmentId?: string; // For department leaders
+  securityQuestion?: SecurityQuestion; // Added for password recovery
+  approvalStatus: ApprovalStatus; // Added for user approval workflow
   createdAt: number;
   updatedAt: number;
   syncStatus: SyncStatus;
@@ -66,8 +68,27 @@ export enum UserRole {
   ADMIN = 'admin'
 }
 
+export enum ApprovalStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected'
+}
+
+export interface SecurityQuestion {
+  question: string;
+  answer: string;
+}
+
 export type SyncStatus = 'synced' | 'pending' | 'not-synced';
 
 // Helper types
 export type EntityType = 'member' | 'department' | 'position' | 'schedule' | 'user';
 
+// Security questions options
+export const SECURITY_QUESTIONS = [
+  "Qual é o nome da sua mãe?",
+  "Em qual cidade você nasceu?",
+  "Qual é o nome do seu primeiro animal de estimação?",
+  "Qual é o seu mês de nascimento?",
+  "Qual foi sua primeira escola?"
+];

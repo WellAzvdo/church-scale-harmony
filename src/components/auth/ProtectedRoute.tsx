@@ -5,7 +5,7 @@ import { useAuth, Permission } from '@/contexts/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredPermission: string;
+  requiredPermission: Permission;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
@@ -25,8 +25,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
   
   // Check if user has permission to access the route
-  if (!checkPermission(requiredPermission as Permission)) {
-    // Redirect to a default page or access denied page
+  if (!checkPermission(requiredPermission)) {
+    // Redirect to access denied page
     return <Navigate to="/acesso-negado" replace />;
   }
   

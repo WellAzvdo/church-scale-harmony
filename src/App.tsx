@@ -11,17 +11,22 @@ import { processSchedulesForNotifications, initializeNotifications } from "./ser
 // Pages
 import Index from "./pages/Index";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ResetPassword from "./pages/ResetPassword";
 import Members from "./pages/Members";
 import Departments from "./pages/Departments";
 import Schedules from "./pages/Schedules";
 import Settings from "./pages/Settings";
 import UserSettings from "./pages/UserSettings";
+import UserApproval from "./pages/UserApproval";
+import UserManagement from "./pages/UserManagement";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 
 // Components
 import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import { Permission } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -49,32 +54,44 @@ const App = () => {
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/acesso-negado" element={<AccessDenied />} />
                 
                 <Route path="/" element={<AppLayout />}>
                   <Route path="/members" element={
-                    <ProtectedRoute requiredPermission="view_all">
+                    <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
                       <Members />
                     </ProtectedRoute>
                   } />
                   <Route path="/departments" element={
-                    <ProtectedRoute requiredPermission="view_all">
+                    <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
                       <Departments />
                     </ProtectedRoute>
                   } />
                   <Route path="/schedules" element={
-                    <ProtectedRoute requiredPermission="view_own_schedules">
+                    <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
                       <Schedules />
                     </ProtectedRoute>
                   } />
                   <Route path="/settings" element={
-                    <ProtectedRoute requiredPermission="manage_all">
+                    <ProtectedRoute requiredPermission={Permission.MANAGE_ALL}>
                       <Settings />
                     </ProtectedRoute>
                   } />
                   <Route path="/profile" element={
-                    <ProtectedRoute requiredPermission="view_personal_settings">
+                    <ProtectedRoute requiredPermission={Permission.VIEW_PERSONAL_SETTINGS}>
                       <UserSettings />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/user-approval" element={
+                    <ProtectedRoute requiredPermission={Permission.APPROVE_USERS}>
+                      <UserApproval />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/user-management" element={
+                    <ProtectedRoute requiredPermission={Permission.MANAGE_USER_ROLES}>
+                      <UserManagement />
                     </ProtectedRoute>
                   } />
                 </Route>
