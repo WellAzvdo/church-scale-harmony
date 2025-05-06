@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Department, Position } from '@/lib/models';
 import { generateId } from '@/lib/scheduleUtils';
+import { Trash2 } from 'lucide-react';
 
 interface DepartmentFormProps {
   department: Department | null;
