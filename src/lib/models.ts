@@ -52,6 +52,7 @@ export interface Schedule {
 export interface User {
   id: string;
   username: string;
+  password?: string; // Added password field as optional
   memberId?: string; // Optional link to a member
   role: UserRole;
   departmentId?: string; // For department leaders

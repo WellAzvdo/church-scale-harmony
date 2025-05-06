@@ -1,9 +1,8 @@
-
 import { Preferences } from '@capacitor/preferences';
 import { Member, Department, Position, Schedule, EntityType, User, ApprovalStatus } from './models';
 
 // Key prefixes for different entities in storage
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   MEMBERS: 'members',
   DEPARTMENTS: 'departments',
   POSITIONS: 'positions',
@@ -15,7 +14,7 @@ const STORAGE_KEYS = {
 };
 
 // Generic function to set data in storage
-async function setData<T>(key: string, data: T): Promise<void> {
+export async function setData<T>(key: string, data: T): Promise<void> {
   await Preferences.set({
     key,
     value: JSON.stringify(data),
@@ -201,14 +200,10 @@ export async function rejectUser(userId: string): Promise<void> {
 }
 
 export async function resetUserPassword(userId: string, newPassword: string): Promise<void> {
-  // In a real app, this would hash the password
-  // For demo purposes, we're just storing it directly (not secure)
   const users = await getUsers();
   const userIndex = users.findIndex(u => u.id === userId);
   
   if (userIndex >= 0) {
-    // In a real app, you would store a password hash, not the actual password
-    // For demo purposes we're storing it as a separate field
     users[userIndex] = {
       ...users[userIndex],
       password: newPassword,

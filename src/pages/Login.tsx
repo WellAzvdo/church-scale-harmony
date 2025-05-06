@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -57,6 +56,8 @@ const Login: React.FC = () => {
           };
           
           await storage.saveUser(adminUser);
+          console.log('Admin user created successfully:', adminUser);
+          setNotification('Conta de administrador criada. Use: admin / admin para login');
         }
       } catch (error) {
         console.error('Error checking/creating initial users:', error);
