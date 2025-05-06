@@ -1,6 +1,5 @@
-
 import { Preferences } from '@capacitor/preferences';
-import { Member, Department, Position, Schedule, EntityType } from './models';
+import { Member, Department, Position, Schedule, EntityType, User } from './models';
 
 // Key prefixes for different entities in storage
 const STORAGE_KEYS = {
@@ -8,6 +7,9 @@ const STORAGE_KEYS = {
   DEPARTMENTS: 'departments',
   POSITIONS: 'positions',
   SCHEDULES: 'schedules',
+  USERS: 'users',
+  CURRENT_USER: 'current_user',
+  NOTIFICATIONS: 'notifications',
   SYNC_TIMESTAMP: 'last_sync',
 };
 
@@ -124,6 +126,61 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
   let schedules = await getSchedules();
   schedules = schedules.filter(s => s.id !== scheduleId);
   await setData(STORAGE_KEYS.SCHEDULES, schedules);
+}
+
+// Users
+export async function getUsers(): Promise<User[]> {
+  return getData<User[]>(STORAGE_KEYS.USERS, []);
+}
+
+export async function saveUser(user: User): Promise<void> {
+  const users = await getUsers();
+  const existingIndex = users.findIndex(u => u.id === user.id);
+  
+  if (existingIndex >= 0) {
+    users[existingIndex] = user;
+  } else {
+    users.push(user);
+  }
+  
+  await setData(STORAGE_KEYS.USERS, users);
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  let users = await getUsers();
+  users = users.filter(u => u.id !== userId);
+  await setData(STORAGE_KEYS.USERS, users);
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  return getData<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+}
+
+export async function setCurrentUser(user: User): Promise<void> {
+  await setData(STORAGE_KEYS.CURRENT_USER, user);
+}
+
+export async function clearCurrentUser(): Promise<void> {
+  await Preferences.remove({ key: STORAGE_KEYS.CURRENT_USER });
+}
+
+// Notifications
+export async function getScheduledNotifications(): Promise<string[]> {
+  return getData<string[]>(STORAGE_KEYS.NOTIFICATIONS, []);
+}
+
+export async function saveScheduledNotification(notificationId: string): Promise<void> {
+  const notifications = await getScheduledNotifications();
+  if (!notifications.includes(notificationId)) {
+    notifications.push(notificationId);
+    await setData(STORAGE_KEYS.NOTIFICATIONS, notifications);
+  }
+}
+
+export async function removeScheduledNotification(notificationId: string): Promise<void> {
+  const notifications = await getScheduledNotifications();
+  const updatedNotifications = notifications.filter(id => id !== notificationId);
+  await setData(STORAGE_KEYS.NOTIFICATIONS, updatedNotifications);
 }
 
 // Sync functions

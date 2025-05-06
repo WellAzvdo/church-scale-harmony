@@ -1,10 +1,10 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { Schedule, Member, Department } from '@/lib/models';
+import { Schedule, Member, Department, User, UserRole } from '@/lib/models';
 import * as storage from '@/lib/storage';
 
-export const useSchedulesData = (selectedDate: Date) => {
+export const useSchedulesData = (selectedDate: Date, currentUser: User | null = null) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -37,9 +37,28 @@ export const useSchedulesData = (selectedDate: Date) => {
     try {
       const allSchedules = await storage.getSchedules();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      const filteredSchedules = allSchedules.filter(
+      
+      // Filter schedules by date
+      let filteredSchedules = allSchedules.filter(
         schedule => schedule.date === formattedDate
       );
+      
+      // Apply user role-based filtering
+      if (currentUser) {
+        if (currentUser.role === UserRole.MEMBER && currentUser.memberId) {
+          // Members can only see their own schedules
+          filteredSchedules = filteredSchedules.filter(
+            schedule => schedule.memberId === currentUser.memberId
+          );
+        } else if (currentUser.role === UserRole.DEPARTMENT_LEADER && currentUser.departmentId) {
+          // Department leaders can only see schedules for their department
+          filteredSchedules = filteredSchedules.filter(
+            schedule => schedule.departmentId === currentUser.departmentId
+          );
+        }
+        // Admins can see all schedules, so no filtering needed
+      }
+      
       setSchedules(filteredSchedules);
       return filteredSchedules;
     } catch (error) {
@@ -77,7 +96,7 @@ export const useSchedulesData = (selectedDate: Date) => {
 
   useEffect(() => {
     loadSchedules();
-  }, [selectedDate]);
+  }, [selectedDate, currentUser]);
 
   return {
     schedules,

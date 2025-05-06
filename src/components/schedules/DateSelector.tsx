@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale/pt-BR';
+import { ptBR } from 'date-fns/locale';
 
 interface DateSelectorProps {
   selectedDate: Date;
@@ -41,6 +41,7 @@ const DateSelector: React.FC<DateSelectorProps> = ({
             onSelect={onDateSelect}
             initialFocus
             className="p-3"
+            locale={ptBR}
           />
         </PopoverContent>
       </Popover>

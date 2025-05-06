@@ -22,6 +22,7 @@ export interface Department {
   createdAt: number;
   updatedAt: number;
   syncStatus: SyncStatus;
+  leaderId?: string; // ID of the department leader
 }
 
 export interface Position {
@@ -48,7 +49,25 @@ export interface Schedule {
   syncStatus: SyncStatus;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  memberId?: string; // Optional link to a member
+  role: UserRole;
+  departmentId?: string; // For department leaders
+  createdAt: number;
+  updatedAt: number;
+  syncStatus: SyncStatus;
+}
+
+export enum UserRole {
+  MEMBER = 'member',
+  DEPARTMENT_LEADER = 'department_leader',
+  ADMIN = 'admin'
+}
+
 export type SyncStatus = 'synced' | 'pending' | 'not-synced';
 
 // Helper types
-export type EntityType = 'member' | 'department' | 'position' | 'schedule';
+export type EntityType = 'member' | 'department' | 'position' | 'schedule' | 'user';
+

@@ -10,8 +10,8 @@ interface SchedulesListProps {
   schedules: Schedule[];
   members: Member[];
   departments: Department[];
-  onEditSchedule: (schedule: Schedule) => void;
-  onDeleteSchedule: (scheduleId: string) => void;
+  onEditSchedule?: (schedule: Schedule) => void;
+  onDeleteSchedule?: (scheduleId: string) => void;
 }
 
 const SchedulesList: React.FC<SchedulesListProps> = ({
@@ -62,6 +62,9 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
     );
   }
 
+  const canEdit = !!onEditSchedule;
+  const canDelete = !!onDeleteSchedule;
+
   return (
     <div className="space-y-6">
       {Object.entries(groupedSchedules).map(([departmentId, departmentSchedules]) => {
@@ -89,22 +92,28 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
                           <p className="text-xs italic mt-1">{schedule.notes}</p>
                         )}
                       </div>
-                      <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => onEditSchedule(schedule)}
-                        >
-                          Editar
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          size="sm"
-                          onClick={() => onDeleteSchedule(schedule.id)}
-                        >
-                          Remover
-                        </Button>
-                      </div>
+                      {(canEdit || canDelete) && (
+                        <div className="flex space-x-2">
+                          {canEdit && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => onEditSchedule(schedule)}
+                            >
+                              Editar
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => onDeleteSchedule(schedule.id)}
+                            >
+                              Remover
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </li>
                 ))}
