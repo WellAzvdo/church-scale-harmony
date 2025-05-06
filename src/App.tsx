@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import React, { useEffect } from "react";
+import { processSchedulesForNotifications, initializeNotifications } from "./services/NotificationService";
+
+// Pages
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Members from "./pages/Members";
@@ -12,11 +16,12 @@ import Departments from "./pages/Departments";
 import Schedules from "./pages/Schedules";
 import Settings from "./pages/Settings";
 import UserSettings from "./pages/UserSettings";
-import AppLayout from "./components/layout/AppLayout";
+import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
+
+// Components
+import AppLayout from "./components/layout/AppLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import React, { useEffect } from "react";
-import { processSchedulesForNotifications, initializeNotifications } from "./services/NotificationService";
 
 const queryClient = new QueryClient();
 
@@ -44,8 +49,9 @@ const App = () => {
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/acesso-negado" element={<AccessDenied />} />
                 
-                <Route element={<AppLayout />}>
+                <Route path="/" element={<AppLayout />}>
                   <Route path="/members" element={
                     <ProtectedRoute requiredPermission="view_all">
                       <Members />

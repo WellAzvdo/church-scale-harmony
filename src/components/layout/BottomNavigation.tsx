@@ -37,3 +37,5 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
     </NavLink>
   );
 };
+
+export default BottomNavigation;
