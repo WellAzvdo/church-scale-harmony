@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, Calendar, Layers, Settings, User, UserCheck, Shield } from 'lucide-react';
+import { Users, Calendar, Layers, Settings, User, UserCheck, Shield, MapPin, FileText } from 'lucide-react';
 import { useAuth, Permission } from '@/contexts/AuthContext';
 
 const BottomNavigation: React.FC = () => {
@@ -13,10 +12,22 @@ const BottomNavigation: React.FC = () => {
   const canManageAll = checkPermission(Permission.MANAGE_ALL);
   const canApproveUsers = checkPermission(Permission.APPROVE_USERS);
   const canManageUserRoles = checkPermission(Permission.MANAGE_USER_ROLES);
+  const canManageSchedules = checkPermission(Permission.MANAGE_DEPARTMENT_SCHEDULES);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-lg">
-      <div className="flex items-center justify-around h-16">
+      <div className="flex items-center justify-around h-16 overflow-x-auto">
+        {/* Check-in - everyone can see */}
+        <NavItem to="/checkin" icon={<MapPin className="h-5 w-5" />} label="Check-in" />
+        
+        {/* Schedules - everyone can see their own */}
+        <NavItem to="/schedules" icon={<Calendar className="h-5 w-5" />} label="Escalas" />
+        
+        {/* Check-in Report - only leaders/admin */}
+        {canManageSchedules && (
+          <NavItem to="/checkin-report" icon={<FileText className="h-5 w-5" />} label="Relatório" />
+        )}
+        
         {/* Only show Members navigation if user has permission */}
         {canViewAllMembers && (
           <NavItem to="/members" icon={<Users className="h-5 w-5" />} label="Membros" />
@@ -24,11 +35,8 @@ const BottomNavigation: React.FC = () => {
         
         {/* Only show Departments navigation if user has permission */}
         {canViewAllDepartments && (
-          <NavItem to="/departments" icon={<Layers className="h-5 w-5" />} label="Departamentos" />
+          <NavItem to="/departments" icon={<Layers className="h-5 w-5" />} label="Deptos" />
         )}
-        
-        {/* Everyone can see their schedules */}
-        <NavItem to="/schedules" icon={<Calendar className="h-5 w-5" />} label="Escalas" />
         
         {/* Show user approval link if user has permission */}
         {canApproveUsers && (
@@ -42,7 +50,7 @@ const BottomNavigation: React.FC = () => {
         
         {/* Show admin settings or user profile based on permissions */}
         {canManageAll ? (
-          <NavItem to="/settings" icon={<Settings className="h-5 w-5" />} label="Configurações" />
+          <NavItem to="/settings" icon={<Settings className="h-5 w-5" />} label="Config" />
         ) : (
           <NavItem to="/profile" icon={<User className="h-5 w-5" />} label="Perfil" />
         )}
@@ -62,13 +70,13 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center w-full h-full ${
+        `flex flex-col items-center justify-center min-w-[60px] h-full px-2 ${
           isActive ? 'text-primary-deep' : 'text-muted-foreground'
         }`
       }
     >
       {icon}
-      <span className="text-xs mt-1">{label}</span>
+      <span className="text-xs mt-1 truncate">{label}</span>
     </NavLink>
   );
 };
