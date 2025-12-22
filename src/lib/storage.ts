@@ -1,5 +1,5 @@
 import { Preferences } from '@capacitor/preferences';
-import { Member, Department, Position, Schedule, EntityType, User, ApprovalStatus } from './models';
+import { Member, Department, Position, Schedule, EntityType, User, ApprovalStatus, CheckIn, InternalAlert } from './models';
 
 // Key prefixes for different entities in storage
 export const STORAGE_KEYS = {
@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   CURRENT_USER: 'current_user',
   NOTIFICATIONS: 'notifications',
   SYNC_TIMESTAMP: 'last_sync',
+  CHECKINS: 'checkins',
+  INTERNAL_ALERTS: 'internal_alerts',
 };
 
 // Generic function to set data in storage
@@ -244,4 +246,88 @@ export async function updateLastSyncTimestamp(): Promise<void> {
 // Clear all data (for logout or testing)
 export async function clearAllData(): Promise<void> {
   await Preferences.clear();
+}
+
+// Check-ins
+export async function getCheckIns(): Promise<CheckIn[]> {
+  return getData<CheckIn[]>(STORAGE_KEYS.CHECKINS, []);
+}
+
+export async function getCheckInsByDate(date: string): Promise<CheckIn[]> {
+  const checkIns = await getCheckIns();
+  return checkIns.filter(c => c.date === date);
+}
+
+export async function getCheckInByScheduleId(scheduleId: string): Promise<CheckIn | null> {
+  const checkIns = await getCheckIns();
+  return checkIns.find(c => c.scheduleId === scheduleId) || null;
+}
+
+export async function saveCheckIn(checkIn: CheckIn): Promise<void> {
+  const checkIns = await getCheckIns();
+  const existingIndex = checkIns.findIndex(c => c.id === checkIn.id);
+  
+  if (existingIndex >= 0) {
+    checkIns[existingIndex] = checkIn;
+  } else {
+    checkIns.push(checkIn);
+  }
+  
+  await setData(STORAGE_KEYS.CHECKINS, checkIns);
+}
+
+export async function deleteCheckIn(checkInId: string): Promise<void> {
+  let checkIns = await getCheckIns();
+  checkIns = checkIns.filter(c => c.id !== checkInId);
+  await setData(STORAGE_KEYS.CHECKINS, checkIns);
+}
+
+// Internal Alerts
+export async function getInternalAlerts(): Promise<InternalAlert[]> {
+  return getData<InternalAlert[]>(STORAGE_KEYS.INTERNAL_ALERTS, []);
+}
+
+export async function getUnreadAlerts(userId?: string): Promise<InternalAlert[]> {
+  const alerts = await getInternalAlerts();
+  return alerts.filter(a => !a.read && (!userId || a.targetUserId === userId || !a.targetUserId));
+}
+
+export async function saveInternalAlert(alert: InternalAlert): Promise<void> {
+  const alerts = await getInternalAlerts();
+  const existingIndex = alerts.findIndex(a => a.id === alert.id);
+  
+  if (existingIndex >= 0) {
+    alerts[existingIndex] = alert;
+  } else {
+    alerts.push(alert);
+  }
+  
+  await setData(STORAGE_KEYS.INTERNAL_ALERTS, alerts);
+}
+
+export async function markAlertAsRead(alertId: string): Promise<void> {
+  const alerts = await getInternalAlerts();
+  const alertIndex = alerts.findIndex(a => a.id === alertId);
+  
+  if (alertIndex >= 0) {
+    alerts[alertIndex].read = true;
+    await setData(STORAGE_KEYS.INTERNAL_ALERTS, alerts);
+  }
+}
+
+export async function markAllAlertsAsRead(userId?: string): Promise<void> {
+  const alerts = await getInternalAlerts();
+  const updatedAlerts = alerts.map(a => {
+    if (!userId || a.targetUserId === userId || !a.targetUserId) {
+      return { ...a, read: true };
+    }
+    return a;
+  });
+  await setData(STORAGE_KEYS.INTERNAL_ALERTS, updatedAlerts);
+}
+
+export async function deleteInternalAlert(alertId: string): Promise<void> {
+  let alerts = await getInternalAlerts();
+  alerts = alerts.filter(a => a.id !== alertId);
+  await setData(STORAGE_KEYS.INTERNAL_ALERTS, alerts);
 }

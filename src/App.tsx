@@ -20,6 +20,8 @@ import Settings from "./pages/Settings";
 import UserSettings from "./pages/UserSettings";
 import UserApproval from "./pages/UserApproval";
 import UserManagement from "./pages/UserManagement";
+import CheckIn from "./pages/CheckIn";
+import CheckInReport from "./pages/CheckInReport";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
 
@@ -92,6 +94,16 @@ const App = () => {
                   <Route path="/user-management" element={
                     <ProtectedRoute requiredPermission={Permission.MANAGE_USER_ROLES}>
                       <UserManagement />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/checkin" element={
+                    <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
+                      <CheckIn />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/checkin-report" element={
+                    <ProtectedRoute requiredPermission={Permission.MANAGE_DEPARTMENT_SCHEDULES}>
+                      <CheckInReport />
                     </ProtectedRoute>
                   } />
                 </Route>

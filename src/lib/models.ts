@@ -83,7 +83,43 @@ export interface SecurityQuestion {
 export type SyncStatus = 'synced' | 'pending' | 'not-synced';
 
 // Helper types
-export type EntityType = 'member' | 'department' | 'position' | 'schedule' | 'user';
+export type EntityType = 'member' | 'department' | 'position' | 'schedule' | 'user' | 'checkin';
+
+// Check-in status
+export enum CheckInStatus {
+  PENDING = 'pending',      // Aguardando check-in
+  ON_TIME = 'on_time',      // Adimplente (até 17:30)
+  LATE = 'late',            // Atraso (após 17:30)
+  ABSENT = 'absent'         // Faltoso (sem check-in)
+}
+
+// Check-in interface
+export interface CheckIn {
+  id: string;
+  scheduleId: string;
+  memberId: string;
+  departmentId: string;
+  date: string; // ISO string (yyyy-MM-dd)
+  checkInTime?: string; // ISO timestamp of when check-in was made
+  status: CheckInStatus;
+  createdAt: number;
+  updatedAt: number;
+  syncStatus: SyncStatus;
+}
+
+// Internal alert/notification
+export interface InternalAlert {
+  id: string;
+  type: 'missing_checkin' | 'late_checkin' | 'daily_report';
+  title: string;
+  message: string;
+  targetUserId?: string; // For leader/admin notifications
+  departmentId?: string;
+  memberId?: string;
+  date: string;
+  read: boolean;
+  createdAt: number;
+}
 
 // Security questions options
 export const SECURITY_QUESTIONS = [
@@ -93,3 +129,7 @@ export const SECURITY_QUESTIONS = [
   "Qual é o seu mês de nascimento?",
   "Qual foi sua primeira escola?"
 ];
+
+// Check-in time limits
+export const CHECKIN_DEADLINE = '17:30'; // Limite para adimplente
+export const SERVICE_END_TIME = '21:00'; // Fim do culto
