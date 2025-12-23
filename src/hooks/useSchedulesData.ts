@@ -1,10 +1,16 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { Schedule, Member, Department, User, UserRole } from '@/lib/models';
-import * as storage from '@/lib/storage';
+import type { Schedule, Member, Department, AppRole } from '@/lib/database.types';
+import * as db from '@/services/supabaseService';
 
-export const useSchedulesData = (selectedDate: Date, currentUser: User | null = null) => {
+interface AuthUser {
+  id: string;
+  role: AppRole;
+  departmentId: string | null;
+  memberId: string | null;
+}
+
+export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | null = null) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -15,8 +21,8 @@ export const useSchedulesData = (selectedDate: Date, currentUser: User | null = 
     setIsLoading(true);
     try {
       const [loadedMembers, loadedDepartments] = await Promise.all([
-        storage.getMembers(),
-        storage.getDepartments()
+        db.getMembers(),
+        db.getDepartments()
       ]);
       setMembers(loadedMembers);
       setDepartments(loadedDepartments);
@@ -35,32 +41,29 @@ export const useSchedulesData = (selectedDate: Date, currentUser: User | null = 
 
   const loadSchedules = async () => {
     try {
-      const allSchedules = await storage.getSchedules();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      // Filter schedules by date
-      let filteredSchedules = allSchedules.filter(
-        schedule => schedule.date === formattedDate
-      );
+      // Get schedules for the date
+      let allSchedules = await db.getSchedules(formattedDate);
       
       // Apply user role-based filtering
       if (currentUser) {
-        if (currentUser.role === UserRole.MEMBER && currentUser.memberId) {
+        if (currentUser.role === 'member' && currentUser.memberId) {
           // Members can only see their own schedules
-          filteredSchedules = filteredSchedules.filter(
-            schedule => schedule.memberId === currentUser.memberId
+          allSchedules = allSchedules.filter(
+            schedule => schedule.member_id === currentUser.memberId
           );
-        } else if (currentUser.role === UserRole.DEPARTMENT_LEADER && currentUser.departmentId) {
+        } else if (currentUser.role === 'department_leader' && currentUser.departmentId) {
           // Department leaders can only see schedules for their department
-          filteredSchedules = filteredSchedules.filter(
-            schedule => schedule.departmentId === currentUser.departmentId
+          allSchedules = allSchedules.filter(
+            schedule => schedule.department_id === currentUser.departmentId
           );
         }
         // Admins can see all schedules, so no filtering needed
       }
       
-      setSchedules(filteredSchedules);
-      return filteredSchedules;
+      setSchedules(allSchedules);
+      return allSchedules;
     } catch (error) {
       console.error('Error loading schedules:', error);
       toast({
@@ -74,7 +77,7 @@ export const useSchedulesData = (selectedDate: Date, currentUser: User | null = 
 
   const handleDeleteSchedule = async (scheduleId: string) => {
     try {
-      await storage.deleteSchedule(scheduleId);
+      await db.deleteSchedule(scheduleId);
       toast({
         title: "Escala removida",
         description: "A escala foi removida com sucesso.",
@@ -96,7 +99,7 @@ export const useSchedulesData = (selectedDate: Date, currentUser: User | null = 
 
   useEffect(() => {
     loadSchedules();
-  }, [selectedDate, currentUser]);
+  }, [selectedDate, currentUser?.id]);
 
   return {
     schedules,
@@ -118,7 +121,5 @@ const format = (date: Date, formatStr: string) => {
     return `${year}-${month}-${day}`;
   }
   
-  // For other format strings, we'll need to implement them
-  // or use a different library
   return `${year}-${month}-${day}`;
 };

@@ -1,17 +1,8 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from '@/contexts/AuthContext';
-import { SecurityQuestion, SECURITY_QUESTIONS } from '@/lib/models';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -28,19 +19,13 @@ const registerSchema = z.object({
   fullName: z.string().min(3, {
     message: "Nome completo deve ter pelo menos 3 caracteres.",
   }),
-  username: z.string().min(3, {
-    message: "Nome de usuário deve ter pelo menos 3 caracteres.",
+  email: z.string().email({
+    message: "Digite um e-mail válido.",
   }),
   password: z.string().min(6, {
     message: "Senha deve ter pelo menos 6 caracteres.",
   }),
   confirmPassword: z.string(),
-  securityQuestion: z.string({
-    required_error: "Selecione uma pergunta de segurança.",
-  }),
-  securityAnswer: z.string().min(2, {
-    message: "Resposta deve ter pelo menos 2 caracteres.",
-  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "As senhas não coincidem",
   path: ["confirmPassword"],
@@ -55,15 +40,13 @@ const Register: React.FC = () => {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       fullName: "",
-      username: "",
+      email: "",
       password: "",
       confirmPassword: "",
-      securityQuestion: "",
-      securityAnswer: "",
     },
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated) {
       navigate('/schedules');
     }
@@ -73,20 +56,13 @@ const Register: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const securityQuestion: SecurityQuestion = {
-        question: values.securityQuestion,
-        answer: values.securityAnswer,
-      };
-      
       const success = await register(
-        values.username,
+        values.email,
         values.password,
-        values.fullName,
-        securityQuestion
+        values.fullName
       );
       
       if (success) {
-        // Redirect to login page after successful registration
         navigate('/login', { 
           state: { 
             message: "Conta criada com sucesso. Aguarde a aprovação de um administrador." 
@@ -124,12 +100,12 @@ const Register: React.FC = () => {
             
             <FormField
               control={form.control}
-              name="username"
+              name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome de Usuário</FormLabel>
+                  <FormLabel>E-mail</FormLabel>
                   <FormControl>
-                    <Input placeholder="Escolha um nome de usuário" {...field} disabled={isLoading} />
+                    <Input type="email" placeholder="Digite seu e-mail" {...field} disabled={isLoading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -158,49 +134,6 @@ const Register: React.FC = () => {
                   <FormLabel>Confirmar Senha</FormLabel>
                   <FormControl>
                     <Input type="password" placeholder="Confirme sua senha" {...field} disabled={isLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="securityQuestion"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Pergunta de Segurança</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    disabled={isLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma pergunta" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {SECURITY_QUESTIONS.map((question, index) => (
-                        <SelectItem key={index} value={question}>
-                          {question}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="securityAnswer"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Resposta de Segurança</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Digite sua resposta" {...field} disabled={isLoading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -16,13 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Schedule, Member, Department, Position } from '@/lib/models';
-import * as storage from '@/lib/storage';
-import { generateId } from '@/lib/scheduleUtils';
-import { hasScheduleConflict } from '@/lib/scheduleUtils';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from 'lucide-react';
+import type { Schedule, Member, Department, Position } from '@/lib/database.types';
+import * as db from '@/services/supabaseService';
 import { format } from 'date-fns';
 
 interface ScheduleFormProps {
@@ -41,13 +39,12 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [memberId, setMemberId] = useState(schedule?.memberId || '');
-  const [departmentId, setDepartmentId] = useState(schedule?.departmentId || '');
-  const [positionId, setPositionId] = useState(schedule?.positionId || '');
-  const [startTime, setStartTime] = useState(schedule?.startTime || '09:00');
-  const [endTime, setEndTime] = useState(schedule?.endTime || '11:00');
+  const [memberId, setMemberId] = useState(schedule?.member_id || '');
+  const [departmentId, setDepartmentId] = useState(schedule?.department_id || '');
+  const [positionId, setPositionId] = useState(schedule?.position_id || '');
   const [notes, setNotes] = useState(schedule?.notes || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,34 +53,30 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
 
   useEffect(() => {
     if (departmentId) {
-      const department = departments.find(d => d.id === departmentId);
-      if (department) {
-        setPositions(department.positions);
-        if (!department.positions.some(p => p.id === positionId)) {
-          setPositionId('');
-        }
-      }
+      loadPositions(departmentId);
     } else {
       setPositions([]);
       setPositionId('');
     }
-  }, [departmentId, departments]);
+  }, [departmentId]);
+
+  // Check for conflicts when member or date changes
+  useEffect(() => {
+    checkConflict();
+  }, [memberId, selectedDate]);
 
   const loadData = async () => {
     try {
       const [loadedMembers, loadedDepartments] = await Promise.all([
-        storage.getMembers(),
-        storage.getDepartments()
+        db.getMembers(),
+        db.getDepartments()
       ]);
       
       setMembers(loadedMembers);
       setDepartments(loadedDepartments);
       
       if (departmentId) {
-        const department = loadedDepartments.find(d => d.id === departmentId);
-        if (department) {
-          setPositions(department.positions);
-        }
+        await loadPositions(departmentId);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -95,8 +88,47 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     }
   };
 
+  const loadPositions = async (deptId: string) => {
+    try {
+      const loadedPositions = await db.getPositions(deptId);
+      setPositions(loadedPositions);
+      if (!loadedPositions.some(p => p.id === positionId)) {
+        setPositionId('');
+      }
+    } catch (error) {
+      console.error('Error loading positions:', error);
+    }
+  };
+
+  const checkConflict = async () => {
+    if (!memberId) {
+      setConflictWarning(null);
+      return;
+    }
+
+    try {
+      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+      const { hasConflict, conflictDepartment } = await db.checkScheduleConflict(
+        memberId, 
+        formattedDate,
+        schedule?.id
+      );
+
+      if (hasConflict && conflictDepartment) {
+        const member = members.find(m => m.id === memberId);
+        setConflictWarning(
+          `⚠️ Atenção: ${member?.name || 'Este membro'} já está escalado no departamento ${conflictDepartment.name} no dia ${new Date(formattedDate).toLocaleDateString('pt-BR')}.`
+        );
+      } else {
+        setConflictWarning(null);
+      }
+    } catch (error) {
+      console.error('Error checking conflict:', error);
+    }
+  };
+
   const handleSave = async () => {
-    if (!memberId || !departmentId || !positionId || !startTime || !endTime) {
+    if (!memberId || !departmentId || !positionId) {
       toast({
         title: "Campos obrigatórios",
         description: "Preencha todos os campos obrigatórios.",
@@ -105,10 +137,11 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       return;
     }
 
-    if (startTime >= endTime) {
+    // Block save if there's a conflict
+    if (conflictWarning) {
       toast({
-        title: "Horário inválido",
-        description: "O horário de início deve ser anterior ao horário de fim.",
+        title: "Conflito de escala",
+        description: "Resolva o conflito antes de salvar.",
         variant: "destructive",
       });
       return;
@@ -117,60 +150,34 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     setIsLoading(true);
 
     try {
-      const now = Date.now();
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      let newSchedule: Schedule;
-      
       if (schedule) {
-        newSchedule = {
-          ...schedule,
-          memberId,
-          departmentId,
-          positionId,
+        await db.updateSchedule(schedule.id, {
+          member_id: memberId,
+          department_id: departmentId,
+          position_id: positionId,
           date: formattedDate,
-          startTime,
-          endTime,
-          notes,
-          updatedAt: now,
-          syncStatus: 'pending'
-        };
-      } else {
-        newSchedule = {
-          id: generateId(),
-          memberId,
-          departmentId,
-          positionId,
-          date: formattedDate,
-          startTime,
-          endTime,
-          notes,
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: 'pending'
-        };
-      }
-      
-      // Check for conflicts
-      const hasConflict = await hasScheduleConflict(newSchedule);
-      
-      if (hasConflict) {
-        toast({
-          title: "Conflito de escala",
-          description: "Este membro já está escalado para outro departamento no mesmo horário.",
-          variant: "destructive",
+          notes: notes || null
         });
-        setIsLoading(false);
-        return;
+        toast({
+          title: "Escala atualizada",
+          description: "A escala foi atualizada com sucesso.",
+        });
+      } else {
+        await db.createSchedule({
+          member_id: memberId,
+          department_id: departmentId,
+          position_id: positionId,
+          date: formattedDate,
+          notes: notes || null
+        });
+        toast({
+          title: "Escala criada",
+          description: "Nova escala criada com sucesso.",
+        });
       }
       
-      await storage.saveSchedule(newSchedule);
-      toast({
-        title: schedule ? "Escala atualizada" : "Escala criada",
-        description: schedule 
-          ? "A escala foi atualizada com sucesso." 
-          : "Nova escala criada com sucesso.",
-      });
       onSave();
       onCancel();
     } catch (error) {
@@ -195,25 +202,25 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         </DialogHeader>
         
         <div className="space-y-4 py-4">
+          {conflictWarning && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{conflictWarning}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="member">Membro</Label>
-            <Select 
-              value={memberId} 
-              onValueChange={setMemberId}
-            >
+            <Select value={memberId} onValueChange={setMemberId}>
               <SelectTrigger id="member">
                 <SelectValue placeholder="Selecione um membro" />
               </SelectTrigger>
               <SelectContent>
                 {members.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    Nenhum membro cadastrado
-                  </SelectItem>
+                  <SelectItem value="none" disabled>Nenhum membro cadastrado</SelectItem>
                 ) : (
                   members.map(member => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.name}
-                    </SelectItem>
+                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -222,23 +229,16 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
           
           <div className="space-y-2">
             <Label htmlFor="department">Departamento</Label>
-            <Select 
-              value={departmentId} 
-              onValueChange={setDepartmentId}
-            >
+            <Select value={departmentId} onValueChange={setDepartmentId}>
               <SelectTrigger id="department">
                 <SelectValue placeholder="Selecione um departamento" />
               </SelectTrigger>
               <SelectContent>
                 {departments.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    Nenhum departamento cadastrado
-                  </SelectItem>
+                  <SelectItem value="none" disabled>Nenhum departamento cadastrado</SelectItem>
                 ) : (
                   departments.map(department => (
-                    <SelectItem key={department.id} value={department.id}>
-                      {department.name}
-                    </SelectItem>
+                    <SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -247,58 +247,20 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
           
           <div className="space-y-2">
             <Label htmlFor="position">Função</Label>
-            <Select 
-              value={positionId} 
-              onValueChange={setPositionId}
-              disabled={!departmentId}
-            >
+            <Select value={positionId} onValueChange={setPositionId} disabled={!departmentId}>
               <SelectTrigger id="position">
-                <SelectValue placeholder={
-                  !departmentId 
-                    ? "Selecione um departamento primeiro" 
-                    : "Selecione uma função"
-                } />
+                <SelectValue placeholder={!departmentId ? "Selecione um departamento primeiro" : "Selecione uma função"} />
               </SelectTrigger>
               <SelectContent>
-                {!departmentId ? (
-                  <SelectItem value="none" disabled>
-                    Selecione um departamento primeiro
-                  </SelectItem>
-                ) : positions.length === 0 ? (
-                  <SelectItem value="none" disabled>
-                    Nenhuma função disponível
-                  </SelectItem>
+                {positions.length === 0 ? (
+                  <SelectItem value="none" disabled>Nenhuma função disponível</SelectItem>
                 ) : (
                   positions.map(position => (
-                    <SelectItem key={position.id} value={position.id}>
-                      {position.name}
-                    </SelectItem>
+                    <SelectItem key={position.id} value={position.id}>{position.name}</SelectItem>
                   ))
                 )}
               </SelectContent>
             </Select>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startTime">Horário de início</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="endTime">Horário de fim</Label>
-              <Input
-                id="endTime"
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-              />
-            </div>
           </div>
           
           <div className="space-y-2">
@@ -314,12 +276,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         </div>
         
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel} disabled={isLoading}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={onCancel} disabled={isLoading}>Cancelar</Button>
           <Button 
             onClick={handleSave}
-            disabled={!memberId || !departmentId || !positionId || !startTime || !endTime || isLoading}
+            disabled={!memberId || !departmentId || !positionId || isLoading || !!conflictWarning}
             className="bg-primary hover:bg-primary-medium"
           >
             {isLoading ? "Salvando..." : "Salvar"}
