@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth, Permission } from '@/contexts/AuthContext';
-import { User, UserRole, ApprovalStatus, Department } from '@/lib/models';
-import * as storage from '@/lib/storage';
+import type { AppRole, Profile, UserRole as UserRoleType } from '@/lib/database.types';
+import * as db from '@/services/supabaseService';
 import {
   Card,
   CardContent,
@@ -24,25 +23,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
-import { Shield, Key, UserCog } from 'lucide-react';
+import { Shield, UserCog, Loader2 } from 'lucide-react';
+import type { Department } from '@/lib/database.types';
+
+interface UserWithRole {
+  id: string;
+  email: string;
+  fullName: string;
+  role: AppRole;
+  departmentId: string | null;
+}
 
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserWithRole[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.MEMBER);
+  const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<AppRole>('member');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [isPromoteDialogOpen, setIsPromoteDialogOpen] = useState(false);
-  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
   
-  const { checkPermission, promoteUser, adminResetPassword } = useAuth();
+  const { checkPermission, promoteUser } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -57,12 +62,36 @@ const UserManagement: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const allUsers = await storage.getUsers();
-        const approvedUsers = allUsers.filter(u => u.approvalStatus === ApprovalStatus.APPROVED);
-        setUsers(approvedUsers);
-        
-        const allDepartments = await storage.getDepartments();
+        // Load departments
+        const allDepartments = await db.getDepartments();
         setDepartments(allDepartments);
+        
+        // Load users with their roles from Supabase
+        // Note: We need to query profiles and user_roles tables
+        const { data: rolesData, error: rolesError } = await (await import('@/integrations/supabase/client')).supabase
+          .from('user_roles')
+          .select(`
+            user_id,
+            role,
+            department_id,
+            profiles!user_roles_user_id_fkey (
+              full_name,
+              email
+            )
+          `)
+          .eq('approval_status', 'approved');
+        
+        if (rolesError) throw rolesError;
+        
+        const mappedUsers: UserWithRole[] = (rolesData || []).map((ur: any) => ({
+          id: ur.user_id,
+          email: ur.profiles?.email || '',
+          fullName: ur.profiles?.full_name || 'Sem nome',
+          role: ur.role as AppRole,
+          departmentId: ur.department_id
+        }));
+        
+        setUsers(mappedUsers);
       } catch (error) {
         console.error('Error loading data:', error);
         toast({
@@ -78,17 +107,11 @@ const UserManagement: React.FC = () => {
     loadData();
   }, [toast]);
   
-  const openPromoteDialog = (user: User) => {
+  const openPromoteDialog = (user: UserWithRole) => {
     setSelectedUser(user);
     setSelectedRole(user.role);
     setSelectedDepartment(user.departmentId || '');
     setIsPromoteDialogOpen(true);
-  };
-  
-  const openResetPasswordDialog = (user: User) => {
-    setSelectedUser(user);
-    setNewPassword('');
-    setIsResetPasswordDialogOpen(true);
   };
   
   const handlePromote = async () => {
@@ -97,7 +120,7 @@ const UserManagement: React.FC = () => {
     const success = await promoteUser(
       selectedUser.id, 
       selectedRole,
-      selectedRole === UserRole.DEPARTMENT_LEADER ? selectedDepartment : undefined
+      selectedRole === 'department_leader' ? selectedDepartment : undefined
     );
     
     if (success) {
@@ -108,7 +131,7 @@ const UserManagement: React.FC = () => {
             ? { 
                 ...user, 
                 role: selectedRole,
-                departmentId: selectedRole === UserRole.DEPARTMENT_LEADER ? selectedDepartment : undefined
+                departmentId: selectedRole === 'department_leader' ? selectedDepartment : null
               } 
             : user
         )
@@ -118,28 +141,26 @@ const UserManagement: React.FC = () => {
     }
   };
   
-  const handleResetPassword = async () => {
-    if (!selectedUser || !newPassword) return;
-    
-    const success = await adminResetPassword(selectedUser.id, newPassword);
-    
-    if (success) {
-      setIsResetPasswordDialogOpen(false);
-    }
-  };
-  
-  const getRoleBadge = (role: UserRole) => {
+  const getRoleBadge = (role: AppRole) => {
     switch (role) {
-      case UserRole.ADMIN:
+      case 'admin':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Administrador</Badge>;
-      case UserRole.DEPARTMENT_LEADER:
+      case 'department_leader':
         return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Líder de Departamento</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Membro</Badge>;
     }
   };
   
-  const getDepartmentName = (departmentId?: string) => {
+  const getRoleLabel = (role: AppRole) => {
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'department_leader': return 'Líder de Departamento';
+      default: return 'Membro';
+    }
+  };
+  
+  const getDepartmentName = (departmentId?: string | null) => {
     if (!departmentId) return 'Sem departamento';
     const department = departments.find(d => d.id === departmentId);
     return department ? department.name : 'Departamento não encontrado';
@@ -148,7 +169,7 @@ const UserManagement: React.FC = () => {
   if (isLoading) {
     return (
       <div className="p-4 flex justify-center items-center min-h-screen">
-        <p>Carregando...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -172,7 +193,7 @@ const UserManagement: React.FC = () => {
             <Card key={user.id}>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-lg">{user.username}</CardTitle>
+                  <CardTitle className="text-lg">{user.fullName}</CardTitle>
                   {getRoleBadge(user.role)}
                 </div>
               </CardHeader>
@@ -180,12 +201,13 @@ const UserManagement: React.FC = () => {
               <CardContent>
                 <div className="flex flex-col space-y-4">
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <p className="text-gray-500">Função:</p>
-                    <p>{user.role === UserRole.MEMBER ? 'Membro' : 
-                        user.role === UserRole.DEPARTMENT_LEADER ? 'Líder de Departamento' : 
-                        'Administrador'}</p>
+                    <p className="text-gray-500">E-mail:</p>
+                    <p className="truncate">{user.email}</p>
                     
-                    {user.role === UserRole.DEPARTMENT_LEADER && (
+                    <p className="text-gray-500">Função:</p>
+                    <p>{getRoleLabel(user.role)}</p>
+                    
+                    {user.role === 'department_leader' && (
                       <>
                         <p className="text-gray-500">Departamento:</p>
                         <p>{getDepartmentName(user.departmentId)}</p>
@@ -193,22 +215,13 @@ const UserManagement: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="flex flex-wrap gap-2">
-                    <Button 
-                      onClick={() => openPromoteDialog(user)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <UserCog className="h-4 w-4 mr-2" /> Alterar Função
-                    </Button>
-                    <Button 
-                      onClick={() => openResetPasswordDialog(user)}
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      <Key className="h-4 w-4 mr-2" /> Redefinir Senha
-                    </Button>
-                  </div>
+                  <Button 
+                    onClick={() => openPromoteDialog(user)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <UserCog className="h-4 w-4 mr-2" /> Alterar Função
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -222,26 +235,26 @@ const UserManagement: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Alterar Função do Usuário</DialogTitle>
             <DialogDescription>
-              Altere a função e permissões do usuário {selectedUser?.username}.
+              Altere a função e permissões do usuário {selectedUser?.fullName}.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Nova Função</label>
-              <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+              <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as AppRole)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma função" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={UserRole.MEMBER}>Membro</SelectItem>
-                  <SelectItem value={UserRole.DEPARTMENT_LEADER}>Líder de Departamento</SelectItem>
-                  <SelectItem value={UserRole.ADMIN}>Administrador</SelectItem>
+                  <SelectItem value="member">Membro</SelectItem>
+                  <SelectItem value="department_leader">Líder de Departamento</SelectItem>
+                  <SelectItem value="admin">Administrador</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            {selectedRole === UserRole.DEPARTMENT_LEADER && (
+            {selectedRole === 'department_leader' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">Departamento</label>
                 <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
@@ -266,39 +279,6 @@ const UserManagement: React.FC = () => {
             </Button>
             <Button onClick={handlePromote}>
               Salvar Alterações
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Reset Password Dialog */}
-      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Redefinir Senha</DialogTitle>
-            <DialogDescription>
-              Defina uma nova senha para o usuário {selectedUser?.username}.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nova Senha</label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Digite a nova senha"
-              />
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsResetPasswordDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleResetPassword} disabled={!newPassword}>
-              Redefinir Senha
             </Button>
           </DialogFooter>
         </DialogContent>

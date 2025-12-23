@@ -1,23 +1,34 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, UserRole, SecurityQuestion, ApprovalStatus } from '@/lib/models';
-import * as storage from '@/lib/storage';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
-import { generateId } from '@/lib/scheduleUtils';
+import type { UserRole, Profile, AppRole, ApprovalStatus } from '@/lib/database.types';
+import * as db from '@/services/supabaseService';
+
+interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: AppRole;
+  departmentId: string | null;
+  approvalStatus: ApprovalStatus;
+  memberId: string | null;
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  register: (username: string, password: string, fullName: string, securityQuestion: SecurityQuestion) => Promise<boolean>;
-  resetPassword: (username: string, securityAnswer: string, newPassword: string) => Promise<boolean>;
-  adminResetPassword: (userId: string, newPassword: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  register: (email: string, password: string, fullName: string) => Promise<boolean>;
   checkPermission: (permission: Permission) => boolean;
   approveUser: (userId: string) => Promise<void>;
   rejectUser: (userId: string) => Promise<void>;
-  promoteUser: (userId: string, newRole: UserRole, departmentId?: string) => Promise<boolean>;
+  promoteUser: (userId: string, newRole: AppRole, departmentId?: string) => Promise<boolean>;
+  refreshUser: () => Promise<void>;
 }
 
 export enum Permission {
@@ -33,12 +44,12 @@ export enum Permission {
 }
 
 // Role-based permission mapping
-const rolePermissions: Record<UserRole, Permission[]> = {
-  [UserRole.MEMBER]: [
+const rolePermissions: Record<AppRole, Permission[]> = {
+  member: [
     Permission.VIEW_OWN_SCHEDULES,
     Permission.VIEW_PERSONAL_SETTINGS
   ],
-  [UserRole.DEPARTMENT_LEADER]: [
+  department_leader: [
     Permission.VIEW_OWN_SCHEDULES,
     Permission.VIEW_PERSONAL_SETTINGS,
     Permission.VIEW_DEPARTMENT_SCHEDULES,
@@ -46,7 +57,7 @@ const rolePermissions: Record<UserRole, Permission[]> = {
     Permission.MANAGE_DEPARTMENT_MEMBERS,
     Permission.APPROVE_USERS
   ],
-  [UserRole.ADMIN]: [
+  admin: [
     Permission.VIEW_OWN_SCHEDULES,
     Permission.VIEW_PERSONAL_SETTINGS,
     Permission.VIEW_DEPARTMENT_SCHEDULES,
@@ -62,65 +73,136 @@ const rolePermissions: Record<UserRole, Permission[]> = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const currentUser = await storage.getCurrentUser();
-        setUser(currentUser);
-      } catch (error) {
-        console.error('Error loading user:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Load user data from profile and role
+  const loadUserData = async (supabaseUser: User): Promise<AuthUser | null> => {
+    try {
+      const [profile, userRole] = await Promise.all([
+        db.getProfile(supabaseUser.id),
+        db.getUserRole(supabaseUser.id)
+      ]);
 
-    loadUser();
+      if (!profile || !userRole) {
+        console.log('Profile or role not found');
+        return null;
+      }
+
+      return {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        fullName: profile.full_name,
+        role: userRole.role,
+        departmentId: userRole.department_id,
+        approvalStatus: userRole.approval_status,
+        memberId: profile.member_id
+      };
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      return null;
+    }
+  };
+
+  const refreshUser = async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (currentSession?.user) {
+      const userData = await loadUserData(currentSession.user);
+      setUser(userData);
+    }
+  };
+
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, currentSession) => {
+        console.log('Auth state changed:', event);
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          // Defer data loading to avoid deadlock
+          setTimeout(async () => {
+            const userData = await loadUserData(currentSession.user);
+            setUser(userData);
+            setIsLoading(false);
+          }, 0);
+        } else {
+          setUser(null);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(async ({ data: { session: existingSession } }) => {
+      setSession(existingSession);
+      if (existingSession?.user) {
+        const userData = await loadUserData(existingSession.user);
+        setUser(userData);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
       
-      // For demo purposes, simulate a login API call
-      // In a real app, you'd validate credentials against a backend
-      const users = await storage.getUsers();
-      
-      // Simple username check for demo
-      const foundUser = users.find(u => u.username === username && u.password === password);
-      
-      if (foundUser) {
-        if (foundUser.approvalStatus !== ApprovalStatus.APPROVED) {
-          toast({
-            title: "Acesso negado",
-            description: "Sua conta ainda não foi aprovada por um administrador.",
-            variant: "destructive",
-          });
-          return false;
-        }
-        
-        // Store the current user
-        await storage.setCurrentUser(foundUser);
-        setUser(foundUser);
-        
-        toast({
-          title: "Login bem-sucedido",
-          description: `Bem-vindo(a), ${username}!`,
-        });
-        
-        return true;
-      } else {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        console.error('Login error:', error);
         toast({
           title: "Erro ao fazer login",
-          description: "Usuário ou senha inválidos.",
+          description: error.message === 'Invalid login credentials' 
+            ? "E-mail ou senha inválidos." 
+            : error.message,
           variant: "destructive",
         });
         return false;
       }
+
+      if (data.user) {
+        const userData = await loadUserData(data.user);
+        
+        if (!userData) {
+          toast({
+            title: "Erro ao carregar dados",
+            description: "Não foi possível carregar seus dados de usuário.",
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        if (userData.approvalStatus !== 'approved') {
+          await supabase.auth.signOut();
+          toast({
+            title: "Acesso negado",
+            description: userData.approvalStatus === 'pending' 
+              ? "Sua conta ainda não foi aprovada por um administrador."
+              : "Sua conta foi rejeitada.",
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        setUser(userData);
+        toast({
+          title: "Login bem-sucedido",
+          description: `Bem-vindo(a), ${userData.fullName}!`,
+        });
+        return true;
+      }
+
+      return false;
     } catch (error) {
       console.error('Login error:', error);
       toast({
@@ -134,47 +216,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (
-    username: string, 
-    password: string, 
-    fullName: string, 
-    securityQuestion: SecurityQuestion
-  ): Promise<boolean> => {
+  const register = async (email: string, password: string, fullName: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      
-      // Check if username already exists
-      const usernameExists = await storage.checkUsernameExists(username);
-      if (usernameExists) {
+
+      const redirectUrl = `${window.location.origin}/`;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName
+          }
+        }
+      });
+
+      if (error) {
+        console.error('Registration error:', error);
+        let message = error.message;
+        if (error.message.includes('already registered')) {
+          message = 'Este e-mail já está cadastrado.';
+        }
         toast({
           title: "Erro no cadastro",
-          description: "Este nome de usuário já está em uso.",
+          description: message,
           variant: "destructive",
         });
         return false;
       }
-      
-      // Create a new user
-      const newUser: User = {
-        id: generateId(),
-        username,
-        password, // In a real app, this would be hashed
-        role: UserRole.MEMBER,
-        approvalStatus: ApprovalStatus.PENDING,
-        securityQuestion,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        syncStatus: 'not-synced'
-      };
-      
-      await storage.saveUser(newUser);
-      
-      toast({
-        title: "Cadastro realizado",
-        description: "Sua conta foi criada e está aguardando aprovação.",
-      });
-      
-      return true;
+
+      if (data.user) {
+        // Sign out immediately - user needs approval
+        await supabase.auth.signOut();
+        
+        toast({
+          title: "Cadastro realizado",
+          description: "Sua conta foi criada e está aguardando aprovação de um administrador.",
+        });
+        return true;
+      }
+
+      return false;
     } catch (error) {
       console.error('Registration error:', error);
       toast({
@@ -188,92 +272,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const resetPassword = async (
-    username: string, 
-    securityAnswer: string, 
-    newPassword: string
-  ): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      
-      // Get the user
-      const user = await storage.getUserByUsername(username);
-      
-      if (!user || !user.securityQuestion) {
-        toast({
-          title: "Erro na recuperação",
-          description: "Usuário não encontrado ou sem pergunta de segurança.",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      // Check security answer (case insensitive)
-      if (user.securityQuestion.answer.toLowerCase() !== securityAnswer.toLowerCase()) {
-        toast({
-          title: "Resposta incorreta",
-          description: "A resposta à pergunta de segurança está incorreta.",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      // Reset the password
-      await storage.resetUserPassword(user.id, newPassword);
-      
-      toast({
-        title: "Senha redefinida",
-        description: "Sua senha foi alterada com sucesso.",
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Password reset error:', error);
-      toast({
-        title: "Erro na recuperação",
-        description: "Ocorreu um erro ao tentar redefinir sua senha.",
-        variant: "destructive",
-      });
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const adminResetPassword = async (userId: string, newPassword: string): Promise<boolean> => {
-    try {
-      if (!user || !checkPermission(Permission.MANAGE_USER_ROLES)) {
-        toast({
-          title: "Acesso negado",
-          description: "Você não tem permissão para redefinir senhas.",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      await storage.resetUserPassword(userId, newPassword);
-      
-      toast({
-        title: "Senha redefinida",
-        description: "A senha do usuário foi alterada com sucesso.",
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Admin password reset error:', error);
-      toast({
-        title: "Erro na redefinição",
-        description: "Ocorreu um erro ao tentar redefinir a senha.",
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-
   const logout = async () => {
     try {
-      await storage.clearCurrentUser();
+      await supabase.auth.signOut();
       setUser(null);
+      setSession(null);
       navigate('/login');
       toast({
         title: "Logout realizado",
@@ -286,7 +289,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkPermission = (permission: Permission): boolean => {
     if (!user) return false;
-    
     const userPermissions = rolePermissions[user.role];
     return userPermissions.includes(permission);
   };
@@ -300,9 +302,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return;
     }
-    
+
     try {
-      await storage.approveUser(userId);
+      await db.approveUser(userId);
       toast({
         title: "Usuário aprovado",
         description: "O usuário foi aprovado com sucesso.",
@@ -326,9 +328,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return;
     }
-    
+
     try {
-      await storage.rejectUser(userId);
+      await db.rejectUser(userId);
       toast({
         title: "Usuário rejeitado",
         description: "O usuário foi rejeitado com sucesso.",
@@ -343,11 +345,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const promoteUser = async (
-    userId: string, 
-    newRole: UserRole, 
-    departmentId?: string
-  ): Promise<boolean> => {
+  const promoteUser = async (userId: string, newRole: AppRole, departmentId?: string): Promise<boolean> => {
     if (!user || !checkPermission(Permission.MANAGE_USER_ROLES)) {
       toast({
         title: "Acesso negado",
@@ -356,34 +354,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return false;
     }
-    
+
     try {
-      const users = await storage.getUsers();
-      const userToPromoteIndex = users.findIndex(u => u.id === userId);
-      
-      if (userToPromoteIndex < 0) {
-        toast({
-          title: "Usuário não encontrado",
-          description: "O usuário selecionado não foi encontrado.",
-          variant: "destructive",
-        });
-        return false;
-      }
-      
-      users[userToPromoteIndex] = {
-        ...users[userToPromoteIndex],
-        role: newRole,
-        departmentId: newRole === UserRole.DEPARTMENT_LEADER ? departmentId : undefined,
-        updatedAt: Date.now()
-      };
-      
-      await storage.setData(storage.STORAGE_KEYS.USERS, users);
-      
+      await db.updateUserRole(userId, newRole, departmentId);
       toast({
         title: "Função atualizada",
         description: "A função do usuário foi atualizada com sucesso.",
       });
-      
       return true;
     } catch (error) {
       console.error('Promote user error:', error);
@@ -397,19 +374,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      isAuthenticated: !!user, 
+    <AuthContext.Provider value={{
+      user,
+      session,
+      isAuthenticated: !!user && user.approvalStatus === 'approved',
       isLoading,
       login,
       logout,
       register,
-      resetPassword,
-      adminResetPassword,
       checkPermission,
       approveUser,
       rejectUser,
-      promoteUser
+      promoteUser,
+      refreshUser
     }}>
       {children}
     </AuthContext.Provider>

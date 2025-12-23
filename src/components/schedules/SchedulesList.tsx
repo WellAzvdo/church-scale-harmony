@@ -1,10 +1,7 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Schedule, Member, Department } from '@/lib/models';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale/pt-BR';
+import type { Schedule, Member, Department } from '@/lib/database.types';
 
 interface SchedulesListProps {
   schedules: Schedule[];
@@ -30,19 +27,11 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
     return departments.find(d => d.id === departmentId);
   };
 
-  const getPositionName = (departmentId: string, positionId: string) => {
-    const department = departments.find(d => d.id === departmentId);
-    if (!department) return 'Posição não encontrada';
-    
-    const position = department.positions.find(p => p.id === positionId);
-    return position ? position.name : 'Posição não encontrada';
-  };
-
   const groupSchedulesByDepartment = () => {
     const grouped: Record<string, Schedule[]> = {};
     
     schedules.forEach(schedule => {
-      const deptId = schedule.departmentId;
+      const deptId = schedule.department_id;
       if (!grouped[deptId]) {
         grouped[deptId] = [];
       }
@@ -81,12 +70,9 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
                   <li key={schedule.id} className="p-4">
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="font-medium">{getMemberName(schedule.memberId)}</h4>
+                        <h4 className="font-medium">{getMemberName(schedule.member_id)}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {getPositionName(schedule.departmentId, schedule.positionId)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {schedule.startTime} - {schedule.endTime}
+                          {new Date(schedule.date).toLocaleDateString('pt-BR')}
                         </p>
                         {schedule.notes && (
                           <p className="text-xs italic mt-1">{schedule.notes}</p>
