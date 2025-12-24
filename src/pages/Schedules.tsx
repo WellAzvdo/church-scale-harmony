@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Plus } from 'lucide-react';
-import { Schedule } from '@/lib/models';
+import { Schedule } from '@/lib/database.types';
 import ScheduleForm from '@/components/schedules/ScheduleForm';
 import DateSelector from '@/components/schedules/DateSelector';
 import SchedulesList from '@/components/schedules/SchedulesList';
@@ -87,7 +87,7 @@ const Schedules: React.FC = () => {
             loadSchedules();
             
             // Schedule a notification if this is for the current user
-            if (user?.memberId && (!editingSchedule || editingSchedule.memberId === user.memberId)) {
+            if (user?.memberId && (!editingSchedule || editingSchedule.member_id === user.memberId)) {
               import('@/services/NotificationService').then(({ processSchedulesForNotifications }) => {
                 processSchedulesForNotifications();
               });
