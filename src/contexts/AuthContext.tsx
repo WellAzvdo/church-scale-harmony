@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import type { UserRole, Profile, AppRole, ApprovalStatus } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
+import { logger } from '@/lib/logger';
 
 interface AuthUser {
   id: string;
@@ -88,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       if (!profile || !userRole) {
-        console.log('Profile or role not found');
+        logger.log('Profile or role not found');
         return null;
       }
 
@@ -102,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         memberId: profile.member_id
       };
     } catch (error) {
-      console.error('Error loading user data:', error);
+      logger.error('Error loading user data:', error);
       return null;
     }
   };
@@ -119,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        console.log('Auth state changed:', event);
+        logger.log('Auth state changed:', event);
         setSession(currentSession);
         
         if (currentSession?.user) {
@@ -159,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Login error:', error);
+        logger.error('Login error:', error);
         toast({
           title: "Erro ao fazer login",
           description: error.message === 'Invalid login credentials' 
@@ -204,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return false;
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       toast({
         title: "Erro ao fazer login",
         description: "Ocorreu um erro ao tentar fazer login.",
@@ -234,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Registration error:', error);
+        logger.error('Registration error:', error);
         let message = error.message;
         if (error.message.includes('already registered')) {
           message = 'Este e-mail já está cadastrado.';
@@ -260,7 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return false;
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('Registration error:', error);
       toast({
         title: "Erro no cadastro",
         description: "Ocorreu um erro ao tentar criar sua conta.",
@@ -283,7 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Você saiu com sucesso.",
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
     }
   };
 
@@ -310,7 +311,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "O usuário foi aprovado com sucesso.",
       });
     } catch (error) {
-      console.error('Approve user error:', error);
+      logger.error('Approve user error:', error);
       toast({
         title: "Erro na aprovação",
         description: "Ocorreu um erro ao tentar aprovar o usuário.",
@@ -336,7 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "O usuário foi rejeitado com sucesso.",
       });
     } catch (error) {
-      console.error('Reject user error:', error);
+      logger.error('Reject user error:', error);
       toast({
         title: "Erro na rejeição",
         description: "Ocorreu um erro ao tentar rejeitar o usuário.",
@@ -363,7 +364,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return true;
     } catch (error) {
-      console.error('Promote user error:', error);
+      logger.error('Promote user error:', error);
       toast({
         title: "Erro na promoção",
         description: "Ocorreu um erro ao tentar alterar a função do usuário.",

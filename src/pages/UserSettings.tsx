@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/AuthContext';
 import { Member } from '@/lib/models';
 import * as storage from '@/lib/storage';
+import { logger } from '@/lib/logger';
 
 const UserSettings: React.FC = () => {
   const { user, logout } = useAuth();
@@ -31,7 +32,7 @@ const UserSettings: React.FC = () => {
             setPhone(foundMember.phone || '');
           }
         } catch (error) {
-          console.error('Error loading member data:', error);
+          logger.error('Error loading member data:', error);
           toast({
             title: "Erro ao carregar dados",
             description: "Não foi possível carregar seus dados.",
@@ -71,7 +72,7 @@ const UserSettings: React.FC = () => {
         description: "Suas informações foram atualizadas com sucesso.",
       });
     } catch (error) {
-      console.error('Error saving profile:', error);
+      logger.error('Error saving profile:', error);
       toast({
         title: "Erro ao salvar",
         description: "Não foi possível salvar suas informações.",

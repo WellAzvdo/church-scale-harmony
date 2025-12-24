@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, UserCheck } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
+import { logger } from '@/lib/logger';
 
 const UserApproval: React.FC = () => {
   const [pendingUsers, setPendingUsers] = useState<User[]>([]);
@@ -37,7 +38,7 @@ const UserApproval: React.FC = () => {
         const users = await storage.getPendingUsers();
         setPendingUsers(users);
       } catch (error) {
-        console.error('Error loading pending users:', error);
+        logger.error('Error loading pending users:', error);
         toast({
           title: "Erro ao carregar usuários",
           description: "Não foi possível carregar os usuários pendentes.",
@@ -57,7 +58,7 @@ const UserApproval: React.FC = () => {
       // Remove the approved user from the list
       setPendingUsers(current => current.filter(user => user.id !== userId));
     } catch (error) {
-      console.error('Error approving user:', error);
+      logger.error('Error approving user:', error);
     }
   };
   
@@ -67,7 +68,7 @@ const UserApproval: React.FC = () => {
       // Remove the rejected user from the list
       setPendingUsers(current => current.filter(user => user.id !== userId));
     } catch (error) {
-      console.error('Error rejecting user:', error);
+      logger.error('Error rejecting user:', error);
     }
   };
   
