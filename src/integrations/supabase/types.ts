@@ -395,6 +395,18 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      create_system_alert: {
+        Args: {
+          _date: string
+          _department_id?: string
+          _member_id?: string
+          _message: string
+          _target_user_id?: string
+          _title: string
+          _type: string
+        }
+        Returns: string
+      }
       get_user_approval_status: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["approval_status"]
