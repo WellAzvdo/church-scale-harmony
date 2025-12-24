@@ -2,6 +2,7 @@
 import { Network } from '@capacitor/network';
 import { Member, Department, Position, Schedule, SyncStatus } from './models';
 import * as storage from './storage';
+import { logger } from './logger';
 
 // This is a basic mock implementation that would need to be replaced with actual API calls
 // when connecting to a real backend
@@ -25,7 +26,7 @@ export function addNetworkStatusListener(callback: (isConnected: boolean) => voi
 // Sync all data with server
 export async function syncAll(): Promise<void> {
   if (!(await isOnline())) {
-    console.log('Device is offline, cannot sync');
+    logger.log('Device is offline, cannot sync');
     return;
   }
   
@@ -45,9 +46,9 @@ export async function syncAll(): Promise<void> {
     // Update sync timestamp
     await storage.updateLastSyncTimestamp();
     
-    console.log('Sync completed successfully');
+    logger.log('Sync completed successfully');
   } catch (error) {
-    console.error('Sync failed:', error);
+    logger.error('Sync failed:', error);
     throw error;
   }
 }
@@ -56,7 +57,7 @@ export async function syncAll(): Promise<void> {
 async function pullChanges(lastSync: number): Promise<void> {
   try {
     // This is a mock implementation; replace with actual API calls
-    console.log(`Pulling changes since ${new Date(lastSync).toISOString()}`);
+    logger.log(`Pulling changes since ${new Date(lastSync).toISOString()}`);
     
     // In a real implementation, you would:
     // 1. Fetch new/updated members
@@ -68,7 +69,7 @@ async function pullChanges(lastSync: number): Promise<void> {
     // For now, we'll just mock it
     await new Promise(resolve => setTimeout(resolve, 1000));
   } catch (error) {
-    console.error('Error pulling changes:', error);
+    logger.error('Error pulling changes:', error);
     throw error;
   }
 }
@@ -81,14 +82,14 @@ async function pushMembers(): Promise<void> {
     
     for (const member of pendingMembers) {
       // In a real implementation, you would send the member to the server
-      console.log(`Syncing member: ${member.name}`);
+      logger.log(`Syncing member: ${member.name}`);
       
       // Mock successful sync
       member.syncStatus = 'synced';
       await storage.saveMember(member);
     }
   } catch (error) {
-    console.error('Error pushing members:', error);
+    logger.error('Error pushing members:', error);
     throw error;
   }
 }
@@ -101,14 +102,14 @@ async function pushDepartments(): Promise<void> {
     
     for (const department of pendingDepartments) {
       // In a real implementation, you would send the department to the server
-      console.log(`Syncing department: ${department.name}`);
+      logger.log(`Syncing department: ${department.name}`);
       
       // Mock successful sync
       department.syncStatus = 'synced';
       await storage.saveDepartment(department);
     }
   } catch (error) {
-    console.error('Error pushing departments:', error);
+    logger.error('Error pushing departments:', error);
     throw error;
   }
 }
@@ -121,14 +122,14 @@ async function pushPositions(): Promise<void> {
     
     for (const position of pendingPositions) {
       // In a real implementation, you would send the position to the server
-      console.log(`Syncing position: ${position.name}`);
+      logger.log(`Syncing position: ${position.name}`);
       
       // Mock successful sync
       position.syncStatus = 'synced';
       await storage.savePosition(position);
     }
   } catch (error) {
-    console.error('Error pushing positions:', error);
+    logger.error('Error pushing positions:', error);
     throw error;
   }
 }
@@ -141,14 +142,14 @@ async function pushSchedules(): Promise<void> {
     
     for (const schedule of pendingSchedules) {
       // In a real implementation, you would send the schedule to the server
-      console.log(`Syncing schedule: ${schedule.id}`);
+      logger.log(`Syncing schedule: ${schedule.id}`);
       
       // Mock successful sync
       schedule.syncStatus = 'synced';
       await storage.saveSchedule(schedule);
     }
   } catch (error) {
-    console.error('Error pushing schedules:', error);
+    logger.error('Error pushing schedules:', error);
     throw error;
   }
 }

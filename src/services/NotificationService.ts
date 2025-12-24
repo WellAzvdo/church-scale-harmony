@@ -2,6 +2,7 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Schedule, Member, Department, Position } from '@/lib/models';
 import * as storage from '@/lib/storage';
+import { logger } from '@/lib/logger';
 
 // Initialize notifications permission
 export async function initializeNotifications() {
@@ -14,7 +15,7 @@ export async function initializeNotifications() {
     
     return display === 'granted';
   } catch (error) {
-    console.error('Error initializing notifications:', error);
+    logger.error('Error initializing notifications:', error);
     return false;
   }
 }
@@ -35,7 +36,7 @@ export async function scheduleNotification(
     
     // Skip if the notification time is in the past
     if (notificationDate <= new Date()) {
-      console.log('Notification time is in the past, skipping');
+      logger.log('Notification time is in the past, skipping');
       return null;
     }
     
@@ -65,7 +66,7 @@ export async function scheduleNotification(
     
     return notificationId;
   } catch (error) {
-    console.error('Error scheduling notification:', error);
+    logger.error('Error scheduling notification:', error);
     return null;
   }
 }
@@ -80,7 +81,7 @@ export async function cancelNotification(notificationId: number | string) {
     
     await storage.removeScheduledNotification(id.toString());
   } catch (error) {
-    console.error('Error canceling notification:', error);
+    logger.error('Error canceling notification:', error);
   }
 }
 
@@ -109,6 +110,6 @@ export async function processSchedulesForNotifications() {
       }
     }
   } catch (error) {
-    console.error('Error processing schedules for notifications:', error);
+    logger.error('Error processing schedules for notifications:', error);
   }
 }

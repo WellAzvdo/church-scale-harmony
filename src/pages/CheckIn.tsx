@@ -16,6 +16,7 @@ import {
   getStatusColor,
   checkMissingCheckIns
 } from '@/lib/checkinUtils';
+import { logger } from '@/lib/logger';
 
 interface ScheduleWithStatus {
   schedule: Schedule;
@@ -88,7 +89,7 @@ const CheckIn: React.FC = () => {
 
       setSchedules(schedulesWithStatus);
     } catch (error) {
-      console.error('Error loading schedules:', error);
+      logger.error('Error loading schedules:', error);
       toast({
         title: "Erro",
         description: "Não foi possível carregar as escalas.",
@@ -116,7 +117,7 @@ const CheckIn: React.FC = () => {
       // Reload schedules to update UI
       loadTodaySchedules();
     } catch (error) {
-      console.error('Error performing check-in:', error);
+      logger.error('Error performing check-in:', error);
       toast({
         title: "Erro",
         description: "Não foi possível realizar o check-in.",

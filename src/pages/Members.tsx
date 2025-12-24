@@ -9,6 +9,7 @@ import { Member } from '@/lib/models';
 import * as storage from '@/lib/storage';
 import { generateId } from '@/lib/scheduleUtils';
 import MemberForm from '@/components/members/MemberForm';
+import { logger } from '@/lib/logger';
 
 const Members: React.FC = () => {
   const [members, setMembers] = useState<Member[]>([]);
@@ -26,7 +27,7 @@ const Members: React.FC = () => {
       const loadedMembers = await storage.getMembers();
       setMembers(loadedMembers);
     } catch (error) {
-      console.error('Error loading members:', error);
+      logger.error('Error loading members:', error);
       toast({
         title: "Erro ao carregar membros",
         description: "Não foi possível carregar a lista de membros.",
@@ -54,7 +55,7 @@ const Members: React.FC = () => {
       });
       loadMembers();
     } catch (error) {
-      console.error('Error deleting member:', error);
+      logger.error('Error deleting member:', error);
       toast({
         title: "Erro ao excluir membro",
         description: "Não foi possível excluir o membro.",
@@ -99,7 +100,7 @@ const Members: React.FC = () => {
       });
       loadMembers();
     } catch (error) {
-      console.error('Error saving member:', error);
+      logger.error('Error saving member:', error);
       toast({
         title: "Erro ao salvar membro",
         description: "Não foi possível salvar as informações do membro.",

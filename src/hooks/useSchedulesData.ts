@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import type { Schedule, Member, Department, AppRole } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
+import { logger } from '@/lib/logger';
 
 interface AuthUser {
   id: string;
@@ -28,7 +29,7 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
       setDepartments(loadedDepartments);
       await loadSchedules();
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading data:', error);
       toast({
         title: "Erro ao carregar dados",
         description: "Não foi possível carregar os dados necessários.",
@@ -65,7 +66,7 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
       setSchedules(allSchedules);
       return allSchedules;
     } catch (error) {
-      console.error('Error loading schedules:', error);
+      logger.error('Error loading schedules:', error);
       toast({
         title: "Erro ao carregar escalas",
         description: "Não foi possível carregar as escalas.",
@@ -84,7 +85,7 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
       });
       await loadSchedules();
     } catch (error) {
-      console.error('Error deleting schedule:', error);
+      logger.error('Error deleting schedule:', error);
       toast({
         title: "Erro ao remover escala",
         description: "Não foi possível remover a escala.",

@@ -9,6 +9,7 @@ import { Department } from '@/lib/models';
 import * as storage from '@/lib/storage';
 import { generateId } from '@/lib/scheduleUtils';
 import DepartmentForm from '@/components/departments/DepartmentForm';
+import { logger } from '@/lib/logger';
 
 const Departments: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -26,7 +27,7 @@ const Departments: React.FC = () => {
       const loadedDepartments = await storage.getDepartments();
       setDepartments(loadedDepartments);
     } catch (error) {
-      console.error('Error loading departments:', error);
+      logger.error('Error loading departments:', error);
       toast({
         title: "Erro ao carregar departamentos",
         description: "Não foi possível carregar a lista de departamentos.",
@@ -54,7 +55,7 @@ const Departments: React.FC = () => {
       });
       loadDepartments();
     } catch (error) {
-      console.error('Error deleting department:', error);
+      logger.error('Error deleting department:', error);
       toast({
         title: "Erro ao excluir departamento",
         description: "Não foi possível excluir o departamento.",
@@ -98,7 +99,7 @@ const Departments: React.FC = () => {
       });
       loadDepartments();
     } catch (error) {
-      console.error('Error saving department:', error);
+      logger.error('Error saving department:', error);
       toast({
         title: "Erro ao salvar departamento",
         description: "Não foi possível salvar as informações do departamento.",

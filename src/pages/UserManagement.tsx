@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
 import { Shield, UserCog, Loader2 } from 'lucide-react';
 import type { Department } from '@/lib/database.types';
+import { logger } from '@/lib/logger';
 
 interface UserWithRole {
   id: string;
@@ -93,7 +94,7 @@ const UserManagement: React.FC = () => {
         
         setUsers(mappedUsers);
       } catch (error) {
-        console.error('Error loading data:', error);
+        logger.error('Error loading data:', error);
         toast({
           title: "Erro ao carregar dados",
           description: "Não foi possível carregar os dados dos usuários.",

@@ -20,6 +20,7 @@ import {
   getStatusLabel,
   getStatusColor
 } from '@/lib/checkinUtils';
+import { logger } from '@/lib/logger';
 
 interface ReportEntry {
   schedule: Schedule;
@@ -81,7 +82,7 @@ const CheckInReport: React.FC = () => {
 
       setReportData(entries);
     } catch (error) {
-      console.error('Error loading report:', error);
+      logger.error('Error loading report:', error);
       toast({
         title: "Erro",
         description: "Não foi possível carregar o relatório.",

@@ -22,6 +22,7 @@ import { AlertTriangle } from 'lucide-react';
 import type { Schedule, Member, Department, Position } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
 import { format } from 'date-fns';
+import { logger } from '@/lib/logger';
 
 interface ScheduleFormProps {
   schedule: Schedule | null;
@@ -79,7 +80,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         await loadPositions(departmentId);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading data:', error);
       toast({
         title: "Erro ao carregar dados",
         description: "Não foi possível carregar os dados necessários.",
@@ -96,7 +97,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         setPositionId('');
       }
     } catch (error) {
-      console.error('Error loading positions:', error);
+      logger.error('Error loading positions:', error);
     }
   };
 
@@ -123,7 +124,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         setConflictWarning(null);
       }
     } catch (error) {
-      console.error('Error checking conflict:', error);
+      logger.error('Error checking conflict:', error);
     }
   };
 
@@ -181,7 +182,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       onSave();
       onCancel();
     } catch (error) {
-      console.error('Error saving schedule:', error);
+      logger.error('Error saving schedule:', error);
       toast({
         title: "Erro ao salvar escala",
         description: "Não foi possível salvar a escala.",
