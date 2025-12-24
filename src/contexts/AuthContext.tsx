@@ -161,11 +161,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         logger.error('Login error:', error);
+        
+        let errorMessage = "Ocorreu um erro ao fazer login.";
+        
+        // Handle specific error cases
+        if (error.message === 'Invalid login credentials') {
+          errorMessage = "E-mail ou senha incorretos. Verifique suas credenciais.";
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = "E-mail não confirmado. Verifique sua caixa de entrada.";
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = "E-mail inválido.";
+        }
+        
         toast({
           title: "Erro ao fazer login",
-          description: error.message === 'Invalid login credentials' 
-            ? "E-mail ou senha inválidos." 
-            : error.message,
+          description: errorMessage,
           variant: "destructive",
         });
         return false;
@@ -175,21 +185,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userData = await loadUserData(data.user);
         
         if (!userData) {
+          await supabase.auth.signOut();
           toast({
             title: "Erro ao carregar dados",
-            description: "Não foi possível carregar seus dados de usuário.",
+            description: "Não foi possível carregar seus dados de usuário. Contate o administrador.",
             variant: "destructive",
           });
           return false;
         }
 
-        if (userData.approvalStatus !== 'approved') {
+        if (userData.approvalStatus === 'pending') {
+          await supabase.auth.signOut();
+          toast({
+            title: "Aguardando aprovação",
+            description: "Sua conta ainda não foi aprovada. Aguarde a aprovação de um administrador.",
+            variant: "destructive",
+          });
+          return false;
+        }
+
+        if (userData.approvalStatus === 'rejected') {
           await supabase.auth.signOut();
           toast({
             title: "Acesso negado",
-            description: userData.approvalStatus === 'pending' 
-              ? "Sua conta ainda não foi aprovada por um administrador."
-              : "Sua conta foi rejeitada.",
+            description: "Sua conta foi rejeitada. Contate um administrador para mais informações.",
             variant: "destructive",
           });
           return false;
@@ -208,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logger.error('Login error:', error);
       toast({
         title: "Erro ao fazer login",
-        description: "Ocorreu um erro ao tentar fazer login.",
+        description: "Ocorreu um erro inesperado. Tente novamente.",
         variant: "destructive",
       });
       return false;

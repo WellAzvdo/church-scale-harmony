@@ -462,14 +462,30 @@ export async function getUserRole(userId: string): Promise<UserRole | null> {
   return data;
 }
 
-export async function getPendingUsers(): Promise<(UserRole & { profile: Profile })[]> {
-  const { data, error } = await supabase
+export async function getPendingUsers(): Promise<(UserRole & { profile: Profile | null })[]> {
+  // First get pending user roles
+  const { data: userRoles, error: rolesError } = await supabase
     .from('user_roles')
-    .select('*, profile:profiles!user_roles_user_id_fkey(*)')
+    .select('*')
     .eq('approval_status', 'pending');
   
-  if (error) throw error;
-  return (data || []) as any;
+  if (rolesError) throw rolesError;
+  if (!userRoles || userRoles.length === 0) return [];
+  
+  // Then get profiles for these users
+  const userIds = userRoles.map(ur => ur.user_id);
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', userIds);
+  
+  if (profilesError) throw profilesError;
+  
+  // Combine the data
+  return userRoles.map(ur => ({
+    ...ur,
+    profile: profiles?.find(p => p.id === ur.user_id) || null
+  }));
 }
 
 export async function approveUser(userId: string): Promise<void> {
