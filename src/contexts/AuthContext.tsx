@@ -194,16 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return false;
         }
 
-        if (userData.approvalStatus === 'pending') {
-          await supabase.auth.signOut();
-          toast({
-            title: "Aguardando aprovação",
-            description: "Sua conta ainda não foi aprovada. Aguarde a aprovação de um administrador.",
-            variant: "destructive",
-          });
-          return false;
-        }
-
+        // Allow login for pending users - they will be redirected to pending approval page
         if (userData.approvalStatus === 'rejected') {
           await supabase.auth.signOut();
           toast({

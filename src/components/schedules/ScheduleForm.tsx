@@ -23,6 +23,7 @@ import type { Schedule, Member, Department, Position } from '@/lib/database.type
 import * as db from '@/services/supabaseService';
 import { format } from 'date-fns';
 import { logger } from '@/lib/logger';
+import { useAuth, Permission } from '@/contexts/AuthContext';
 
 interface ScheduleFormProps {
   schedule: Schedule | null;
@@ -37,6 +38,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   onSave, 
   onCancel 
 }) => {
+  const { user, checkPermission } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -45,8 +47,12 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   const [positionId, setPositionId] = useState(schedule?.position_id || '');
   const [notes, setNotes] = useState(schedule?.notes || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const isAdmin = checkPermission(Permission.MANAGE_ALL);
+  const isLeader = user?.role === 'department_leader';
 
   useEffect(() => {
     loadData();
@@ -55,9 +61,11 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   useEffect(() => {
     if (departmentId) {
       loadPositions(departmentId);
+      loadMembersForDepartment(departmentId);
     } else {
       setPositions([]);
       setPositionId('');
+      setMembers([]);
     }
   }, [departmentId]);
 
@@ -68,16 +76,27 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
 
   const loadData = async () => {
     try {
-      const [loadedMembers, loadedDepartments] = await Promise.all([
-        db.getMembers(),
-        db.getDepartments()
-      ]);
+      // Load departments
+      let loadedDepartments = await db.getDepartments();
       
-      setMembers(loadedMembers);
+      // For leaders, only show their department
+      if (isLeader && user?.departmentId) {
+        loadedDepartments = loadedDepartments.filter(d => d.id === user.departmentId);
+        // Auto-select the leader's department
+        if (loadedDepartments.length === 1 && !departmentId) {
+          setDepartmentId(loadedDepartments[0].id);
+        }
+      }
+      
       setDepartments(loadedDepartments);
       
-      if (departmentId) {
-        await loadPositions(departmentId);
+      // If editing, load the initial data
+      if (schedule?.department_id) {
+        await loadPositions(schedule.department_id);
+        await loadMembersForDepartment(schedule.department_id);
+      } else if (isLeader && user?.departmentId) {
+        await loadPositions(user.departmentId);
+        await loadMembersForDepartment(user.departmentId);
       }
     } catch (error) {
       logger.error('Error loading data:', error);
@@ -86,6 +105,32 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         description: "Não foi possível carregar os dados necessários.",
         variant: "destructive",
       });
+    }
+  };
+
+  const loadMembersForDepartment = async (deptId: string) => {
+    setIsLoadingMembers(true);
+    try {
+      // For admins, show all members. For leaders, show members from their department.
+      let loadedMembers: Member[];
+      if (isAdmin) {
+        // Admins can see all members, but we still filter by department for better UX
+        loadedMembers = await db.getMembersByDepartment(deptId);
+        // If no members found for department, show all members as fallback
+        if (loadedMembers.length === 0) {
+          loadedMembers = await db.getMembers();
+        }
+      } else {
+        loadedMembers = await db.getMembersByDepartment(deptId);
+      }
+      setMembers(loadedMembers);
+    } catch (error) {
+      logger.error('Error loading members:', error);
+      // Fallback to all members
+      const allMembers = await db.getMembers();
+      setMembers(allMembers);
+    } finally {
+      setIsLoadingMembers(false);
     }
   };
 
@@ -230,7 +275,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
           
           <div className="space-y-2">
             <Label htmlFor="department">Departamento</Label>
-            <Select value={departmentId} onValueChange={setDepartmentId}>
+            <Select value={departmentId} onValueChange={setDepartmentId} disabled={isLeader}>
               <SelectTrigger id="department">
                 <SelectValue placeholder="Selecione um departamento" />
               </SelectTrigger>

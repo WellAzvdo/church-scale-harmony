@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, Permission } from '@/contexts/AuthContext';
-import type { AppRole, Profile, UserRole as UserRoleType } from '@/lib/database.types';
+import type { AppRole, Profile, UserRole as UserRoleType, ApprovalStatus } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Card,
   CardContent,
@@ -27,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
-import { Shield, UserCog, Loader2 } from 'lucide-react';
+import { Shield, UserCog, Loader2, RefreshCw } from 'lucide-react';
 import type { Department } from '@/lib/database.types';
 import { logger } from '@/lib/logger';
 
@@ -37,12 +38,14 @@ interface UserWithRole {
   fullName: string;
   role: AppRole;
   departmentId: string | null;
+  approvalStatus: ApprovalStatus;
 }
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('member');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
@@ -60,53 +63,67 @@ const UserManagement: React.FC = () => {
   }, [checkPermission, navigate]);
   
   // Load users and departments
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load departments
-        const allDepartments = await db.getDepartments();
-        setDepartments(allDepartments);
-        
-        // Load users with their roles from Supabase
-        // Note: We need to query profiles and user_roles tables
-        const { data: rolesData, error: rolesError } = await (await import('@/integrations/supabase/client')).supabase
-          .from('user_roles')
-          .select(`
-            user_id,
-            role,
-            department_id,
-            profiles!user_roles_user_id_fkey (
-              full_name,
-              email
-            )
-          `)
-          .eq('approval_status', 'approved');
-        
-        if (rolesError) throw rolesError;
-        
-        const mappedUsers: UserWithRole[] = (rolesData || []).map((ur: any) => ({
-          id: ur.user_id,
-          email: ur.profiles?.email || '',
-          fullName: ur.profiles?.full_name || 'Sem nome',
-          role: ur.role as AppRole,
-          departmentId: ur.department_id
-        }));
-        
-        setUsers(mappedUsers);
-      } catch (error) {
-        logger.error('Error loading data:', error);
-        toast({
-          title: "Erro ao carregar dados",
-          description: "Não foi possível carregar os dados dos usuários.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
+  const loadData = async () => {
+    try {
+      // Load departments
+      const allDepartments = await db.getDepartments();
+      setDepartments(allDepartments);
+      
+      // Load all user roles first
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*');
+      
+      if (rolesError) throw rolesError;
+      if (!userRoles || userRoles.length === 0) {
+        setUsers([]);
+        return;
       }
-    };
-    
+      
+      // Load all profiles
+      const userIds = userRoles.map(ur => ur.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds);
+      
+      if (profilesError) throw profilesError;
+      
+      // Combine the data
+      const mappedUsers: UserWithRole[] = userRoles.map((ur) => {
+        const profile = profiles?.find(p => p.id === ur.user_id);
+        return {
+          id: ur.user_id,
+          email: profile?.email || '',
+          fullName: profile?.full_name || 'Sem nome',
+          role: ur.role as AppRole,
+          departmentId: ur.department_id,
+          approvalStatus: ur.approval_status as ApprovalStatus
+        };
+      });
+      
+      setUsers(mappedUsers);
+    } catch (error) {
+      logger.error('Error loading data:', error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível carregar os dados dos usuários.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, [toast]);
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadData();
+  };
   
   const openPromoteDialog = (user: UserWithRole) => {
     setSelectedUser(user);
@@ -152,6 +169,19 @@ const UserManagement: React.FC = () => {
         return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Membro</Badge>;
     }
   };
+
+  const getApprovalBadge = (status: ApprovalStatus) => {
+    switch (status) {
+      case 'approved':
+        return <Badge className="bg-green-100 text-green-800 border-green-200">Aprovado</Badge>;
+      case 'pending':
+        return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Pendente</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Rejeitado</Badge>;
+      default:
+        return null;
+    }
+  };
   
   const getRoleLabel = (role: AppRole) => {
     switch (role) {
@@ -177,9 +207,20 @@ const UserManagement: React.FC = () => {
   
   return (
     <div className="p-4 pb-20">
-      <div className="flex items-center mb-6">
-        <Shield className="h-6 w-6 mr-2 text-primary" />
-        <h1 className="text-2xl font-bold text-primary-deep">Gerenciamento de Usuários</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center">
+          <Shield className="h-6 w-6 mr-2 text-primary" />
+          <h1 className="text-2xl font-bold text-primary-deep">Gerenciamento de Usuários</h1>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
       </div>
       
       {users.length === 0 ? (
@@ -193,9 +234,12 @@ const UserManagement: React.FC = () => {
           {users.map(user => (
             <Card key={user.id}>
               <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                   <CardTitle className="text-lg">{user.fullName}</CardTitle>
-                  {getRoleBadge(user.role)}
+                  <div className="flex gap-2">
+                    {getApprovalBadge(user.approvalStatus)}
+                    {getRoleBadge(user.role)}
+                  </div>
                 </div>
               </CardHeader>
               
@@ -214,6 +258,9 @@ const UserManagement: React.FC = () => {
                         <p>{getDepartmentName(user.departmentId)}</p>
                       </>
                     )}
+                    
+                    <p className="text-gray-500">Status:</p>
+                    <p>{user.approvalStatus === 'approved' ? 'Aprovado' : user.approvalStatus === 'pending' ? 'Pendente' : 'Rejeitado'}</p>
                   </div>
                   
                   <Button 

@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,6 +23,7 @@ import CheckIn from "./pages/CheckIn";
 import CheckInReport from "./pages/CheckInReport";
 import AccessDenied from "./pages/AccessDenied";
 import NotFound from "./pages/NotFound";
+import PendingApproval from "./pages/PendingApproval";
 
 // Components
 import AppLayout from "./components/layout/AppLayout";
@@ -59,6 +59,7 @@ const App = () => {
                 <Route path="/register" element={<Register />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/acesso-negado" element={<AccessDenied />} />
+                <Route path="/aguardando-aprovacao" element={<PendingApproval />} />
                 
                 <Route path="/" element={<AppLayout />}>
                   <Route path="/members" element={
