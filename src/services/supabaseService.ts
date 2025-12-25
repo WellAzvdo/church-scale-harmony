@@ -126,6 +126,40 @@ export async function getMembers(): Promise<Member[]> {
   return data || [];
 }
 
+export async function getMembersByDepartment(departmentId: string): Promise<Member[]> {
+  // Get all member_positions for this department's positions
+  const { data: positions, error: posError } = await supabase
+    .from('positions')
+    .select('id')
+    .eq('department_id', departmentId);
+  
+  if (posError) throw posError;
+  if (!positions || positions.length === 0) return [];
+  
+  const positionIds = positions.map(p => p.id);
+  
+  // Get member IDs that have positions in this department
+  const { data: memberPositions, error: mpError } = await supabase
+    .from('member_positions')
+    .select('member_id')
+    .in('position_id', positionIds);
+  
+  if (mpError) throw mpError;
+  if (!memberPositions || memberPositions.length === 0) return [];
+  
+  const memberIds = [...new Set(memberPositions.map(mp => mp.member_id))];
+  
+  // Get the actual members
+  const { data: members, error: memError } = await supabase
+    .from('members')
+    .select('*')
+    .in('id', memberIds)
+    .order('name');
+  
+  if (memError) throw memError;
+  return members || [];
+}
+
 export async function getMember(id: string): Promise<Member | null> {
   const { data, error } = await supabase
     .from('members')

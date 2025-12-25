@@ -14,7 +14,7 @@ const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, user, isAuthenticated, isLoading: authLoading } = useAuth();
   
   // Display notification if redirected with a message
   useEffect(() => {
@@ -23,18 +23,21 @@ const Login: React.FC = () => {
     }
   }, [location]);
   
-  // Redirect if already authenticated
+  // Redirect based on user status
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/schedules');
+    if (user) {
+      if (user.approvalStatus === 'pending') {
+        navigate('/aguardando-aprovacao');
+      } else if (isAuthenticated) {
+        navigate('/schedules');
+      }
     }
-  }, [isAuthenticated, navigate]);
+  }, [user, isAuthenticated, navigate]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
-    // Basic validation
     if (!email || !password) {
       setError('Por favor, preencha todos os campos');
       return;
@@ -46,7 +49,7 @@ const Login: React.FC = () => {
       const success = await login(email, password);
       
       if (success) {
-        navigate('/schedules');
+        // Navigation is handled by the useEffect above
       }
     } catch (error) {
       console.error('Login error:', error);
