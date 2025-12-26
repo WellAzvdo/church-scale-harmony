@@ -21,6 +21,9 @@ export type Database = {
           date: string
           department_id: string
           id: string
+          latitude: number | null
+          location_validated: boolean | null
+          longitude: number | null
           member_id: string
           schedule_id: string
           status: Database["public"]["Enums"]["checkin_status"]
@@ -32,6 +35,9 @@ export type Database = {
           date: string
           department_id: string
           id?: string
+          latitude?: number | null
+          location_validated?: boolean | null
+          longitude?: number | null
           member_id: string
           schedule_id: string
           status?: Database["public"]["Enums"]["checkin_status"]
@@ -43,6 +49,9 @@ export type Database = {
           date?: string
           department_id?: string
           id?: string
+          latitude?: number | null
+          location_validated?: boolean | null
+          longitude?: number | null
           member_id?: string
           schedule_id?: string
           status?: Database["public"]["Enums"]["checkin_status"]
@@ -71,6 +80,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      church_settings: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          name?: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       departments: {
         Row: {
@@ -344,6 +383,35 @@ export type Database = {
             columns: ["position_id"]
             isOneToOne: false
             referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_departments: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]

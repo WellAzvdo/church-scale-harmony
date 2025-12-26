@@ -585,3 +585,112 @@ export async function linkMemberToProfile(userId: string, memberId: string): Pro
   
   if (error) throw error;
 }
+
+// ============= USER DEPARTMENTS =============
+
+export async function getUserDepartments(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_departments')
+    .select('department_id')
+    .eq('user_id', userId);
+  
+  if (error) throw error;
+  return data?.map(d => d.department_id) || [];
+}
+
+export async function getMembersInUserDepartments(userId: string): Promise<Member[]> {
+  // Get user's department assignments
+  const departmentIds = await getUserDepartments(userId);
+  if (departmentIds.length === 0) return [];
+  
+  // Get members that are in these departments
+  const { data: userDepts, error: udError } = await supabase
+    .from('user_departments')
+    .select('user_id')
+    .in('department_id', departmentIds);
+  
+  if (udError) throw udError;
+  
+  const userIds = [...new Set(userDepts?.map(ud => ud.user_id) || [])];
+  if (userIds.length === 0) return [];
+  
+  // Get profiles with member_id for these users
+  const { data: profiles, error: pError } = await supabase
+    .from('profiles')
+    .select('member_id')
+    .in('id', userIds)
+    .not('member_id', 'is', null);
+  
+  if (pError) throw pError;
+  
+  const memberIds = profiles?.map(p => p.member_id).filter(Boolean) as string[];
+  if (memberIds.length === 0) return [];
+  
+  // Get the actual members
+  const { data: members, error: mError } = await supabase
+    .from('members')
+    .select('*')
+    .in('id', memberIds)
+    .order('name');
+  
+  if (mError) throw mError;
+  return members || [];
+}
+
+// ============= CHURCH SETTINGS =============
+
+export async function getChurchSettings(): Promise<{
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+} | null> {
+  const { data, error } = await supabase
+    .from('church_settings')
+    .select('*')
+    .limit(1)
+    .maybeSingle();
+  
+  if (error) throw error;
+  if (!data) return null;
+  
+  return {
+    latitude: data.latitude,
+    longitude: data.longitude,
+    radiusMeters: data.radius_meters
+  };
+}
+
+export async function updateChurchSettings(settings: {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+}): Promise<void> {
+  const { data: existing } = await supabase
+    .from('church_settings')
+    .select('id')
+    .limit(1)
+    .maybeSingle();
+  
+  if (existing) {
+    const { error } = await supabase
+      .from('church_settings')
+      .update({
+        latitude: settings.latitude,
+        longitude: settings.longitude,
+        radius_meters: settings.radiusMeters
+      })
+      .eq('id', existing.id);
+    
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('church_settings')
+      .insert({
+        latitude: settings.latitude,
+        longitude: settings.longitude,
+        radius_meters: settings.radiusMeters
+      });
+    
+    if (error) throw error;
+  }
+}

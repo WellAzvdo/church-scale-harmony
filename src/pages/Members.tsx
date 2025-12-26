@@ -1,31 +1,74 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import { Member } from '@/lib/models';
-import * as storage from '@/lib/storage';
-import { generateId } from '@/lib/scheduleUtils';
-import MemberForm from '@/components/members/MemberForm';
+import { Badge } from "@/components/ui/badge";
+import { Search, Users, Mail, Phone, RefreshCw, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import * as db from '@/services/supabaseService';
 import { logger } from '@/lib/logger';
+import type { Profile, Department } from '@/lib/database.types';
+
+interface MemberWithDepartments {
+  profile: Profile;
+  departments: Department[];
+  approvalStatus: string;
+}
 
 const Members: React.FC = () => {
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<MemberWithDepartments[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    loadMembers();
-  }, []);
 
   const loadMembers = async () => {
     try {
-      const loadedMembers = await storage.getMembers();
-      setMembers(loadedMembers);
+      // Get all profiles (these are the registered users)
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name');
+      
+      if (profilesError) throw profilesError;
+      
+      // Get all user roles
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('*');
+      
+      if (rolesError) throw rolesError;
+      
+      // Get all user departments
+      const { data: userDepts, error: deptsError } = await supabase
+        .from('user_departments')
+        .select('*');
+      
+      if (deptsError) throw deptsError;
+      
+      // Get all departments
+      const departments = await db.getDepartments();
+      
+      // Build member list with their departments
+      const membersWithDepts: MemberWithDepartments[] = (profiles || []).map(profile => {
+        const userRole = userRoles?.find(r => r.user_id === profile.id);
+        const userDepartmentIds = userDepts
+          ?.filter(ud => ud.user_id === profile.id)
+          .map(ud => ud.department_id) || [];
+        const memberDepartments = departments.filter(d => userDepartmentIds.includes(d.id));
+        
+        return {
+          profile,
+          departments: memberDepartments,
+          approvalStatus: userRole?.approval_status || 'pending'
+        };
+      });
+      
+      // Only show approved members
+      const approvedMembers = membersWithDepts.filter(m => m.approvalStatus === 'approved');
+      
+      setMembers(approvedMembers);
     } catch (error) {
       logger.error('Error loading members:', error);
       toast({
@@ -33,99 +76,64 @@ const Members: React.FC = () => {
         description: "Não foi possível carregar a lista de membros.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  const handleAddMember = () => {
-    setEditingMember(null);
-    setIsFormOpen(true);
-  };
+  useEffect(() => {
+    loadMembers();
+  }, []);
 
-  const handleEditMember = (member: Member) => {
-    setEditingMember(member);
-    setIsFormOpen(true);
-  };
-
-  const handleDeleteMember = async (memberId: string) => {
-    try {
-      await storage.deleteMember(memberId);
-      toast({
-        title: "Membro excluído",
-        description: "O membro foi excluído com sucesso.",
-      });
-      loadMembers();
-    } catch (error) {
-      logger.error('Error deleting member:', error);
-      toast({
-        title: "Erro ao excluir membro",
-        description: "Não foi possível excluir o membro.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveMember = async (memberData: Partial<Member>) => {
-    try {
-      const now = Date.now();
-      let member: Member;
-      
-      if (editingMember) {
-        member = {
-          ...editingMember,
-          ...memberData,
-          updatedAt: now,
-          syncStatus: 'pending'
-        } as Member;
-      } else {
-        member = {
-          id: generateId(),
-          name: memberData.name || '',
-          email: memberData.email,
-          phone: memberData.phone,
-          positions: memberData.positions || [],
-          notes: memberData.notes,
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: 'pending'
-        };
-      }
-      
-      await storage.saveMember(member);
-      setIsFormOpen(false);
-      toast({
-        title: editingMember ? "Membro atualizado" : "Membro adicionado",
-        description: editingMember 
-          ? "As informações do membro foram atualizadas com sucesso." 
-          : "Novo membro adicionado com sucesso.",
-      });
-      loadMembers();
-    } catch (error) {
-      logger.error('Error saving member:', error);
-      toast({
-        title: "Erro ao salvar membro",
-        description: "Não foi possível salvar as informações do membro.",
-        variant: "destructive",
-      });
-    }
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    loadMembers();
   };
 
   const filteredMembers = members.filter(member => 
-    member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (member.email && member.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (member.phone && member.phone.includes(searchQuery))
+    member.profile.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (member.profile.email && member.profile.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (member.profile.phone && member.profile.phone.includes(searchQuery))
   );
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <Badge className="bg-green-100 text-green-800">Aprovado</Badge>;
+      case 'pending':
+        return <Badge className="bg-yellow-100 text-yellow-800">Pendente</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   return (
-    <div className="p-4">
+    <div className="p-4 pb-20">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-primary-deep">Membros</h1>
+        <div className="flex items-center gap-2">
+          <Users className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl font-bold text-primary-deep">Membros</h1>
+        </div>
         <Button 
-          onClick={handleAddMember} 
-          className="bg-primary hover:bg-primary-medium"
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          disabled={isRefreshing}
         >
-          <Plus className="h-4 w-4 mr-2" /> Adicionar
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
         </Button>
       </div>
+
+      <Card className="mb-4 bg-muted/50">
+        <CardContent className="p-3">
+          <p className="text-sm text-muted-foreground">
+            Esta lista mostra todos os usuários cadastrados e aprovados no sistema.
+            Para atribuir departamentos, acesse a página de <strong>Usuários</strong>.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -137,66 +145,82 @@ const Members: React.FC = () => {
         />
       </div>
 
-      {filteredMembers.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground">Nenhum membro encontrado.</p>
+      {isLoading ? (
+        <div className="flex justify-center p-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
+      ) : filteredMembers.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              {searchQuery 
+                ? "Nenhum membro encontrado com esse termo."
+                : "Nenhum membro cadastrado ainda."
+              }
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
           {filteredMembers.map((member) => (
-            <Card key={member.id}>
+            <Card key={member.profile.id}>
               <CardHeader className="p-4 pb-2">
                 <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg font-semibold">{member.name}</CardTitle>
-                  <div className="flex space-x-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleEditMember(member)}
-                    >
-                      <Edit className="h-4 w-4 text-primary" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleDeleteMember(member.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <CardTitle className="text-lg font-semibold">
+                    {member.profile.full_name}
+                  </CardTitle>
+                  {getStatusBadge(member.approvalStatus)}
                 </div>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                {member.email && <p className="text-sm text-muted-foreground">{member.email}</p>}
-                {member.phone && <p className="text-sm text-muted-foreground">{member.phone}</p>}
-                {member.positions && member.positions.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground">Funções:</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {member.positions.map((position) => (
-                        <span 
-                          key={position.id} 
-                          className="text-xs bg-secondary px-2 py-0.5 rounded-full"
+                {member.profile.email && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <Mail className="h-4 w-4" />
+                    <span>{member.profile.email}</span>
+                  </div>
+                )}
+                {member.profile.phone && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <Phone className="h-4 w-4" />
+                    <span>{member.profile.phone}</span>
+                  </div>
+                )}
+                
+                {member.departments.length > 0 ? (
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Departamentos:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {member.departments.map((dept) => (
+                        <Badge 
+                          key={dept.id} 
+                          variant="secondary"
+                          style={{ 
+                            backgroundColor: dept.color ? `${dept.color}20` : undefined,
+                            borderColor: dept.color || undefined,
+                            color: dept.color || undefined
+                          }}
+                          className="text-xs border"
                         >
-                          {position.name}
-                        </span>
+                          {dept.name}
+                        </Badge>
                       ))}
                     </div>
                   </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-2 italic">
+                    Sem departamento atribuído
+                  </p>
                 )}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
-
-      {isFormOpen && (
-        <MemberForm
-          member={editingMember}
-          onSave={handleSaveMember}
-          onCancel={() => setIsFormOpen(false)}
-        />
-      )}
+      
+      <div className="mt-6 text-center text-sm text-muted-foreground">
+        Total: {filteredMembers.length} membro(s)
+      </div>
     </div>
   );
 };

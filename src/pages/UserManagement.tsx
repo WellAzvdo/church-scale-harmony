@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth, Permission } from '@/contexts/AuthContext';
-import type { AppRole, Profile, UserRole as UserRoleType, ApprovalStatus } from '@/lib/database.types';
+import type { AppRole, Profile, ApprovalStatus, Department } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -26,10 +26,10 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
-import { Shield, UserCog, Loader2, RefreshCw } from 'lucide-react';
-import type { Department } from '@/lib/database.types';
+import { Shield, UserCog, Loader2, RefreshCw, Building2, Check, X } from 'lucide-react';
 import { logger } from '@/lib/logger';
 
 interface UserWithRole {
@@ -39,6 +39,13 @@ interface UserWithRole {
   role: AppRole;
   departmentId: string | null;
   approvalStatus: ApprovalStatus;
+  assignedDepartments: string[];
+}
+
+interface UserDepartment {
+  id: string;
+  user_id: string;
+  department_id: string;
 }
 
 const UserManagement: React.FC = () => {
@@ -49,15 +56,20 @@ const UserManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserWithRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('member');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [isPromoteDialogOpen, setIsPromoteDialogOpen] = useState(false);
+  const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const { checkPermission, promoteUser } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  const isAdmin = checkPermission(Permission.MANAGE_USER_ROLES);
+  
   // Check if user has permission to manage user roles
   useEffect(() => {
-    if (!checkPermission(Permission.MANAGE_USER_ROLES)) {
+    if (!checkPermission(Permission.MANAGE_USER_ROLES) && !checkPermission(Permission.MANAGE_DEPARTMENT_SCHEDULES)) {
       navigate('/acesso-negado');
     }
   }, [checkPermission, navigate]);
@@ -89,16 +101,28 @@ const UserManagement: React.FC = () => {
       
       if (profilesError) throw profilesError;
       
+      // Load user departments
+      const { data: userDepts, error: deptsError } = await supabase
+        .from('user_departments')
+        .select('*');
+      
+      if (deptsError) throw deptsError;
+      
       // Combine the data
       const mappedUsers: UserWithRole[] = userRoles.map((ur) => {
         const profile = profiles?.find(p => p.id === ur.user_id);
+        const deptIds = (userDepts as UserDepartment[] || [])
+          .filter(ud => ud.user_id === ur.user_id)
+          .map(ud => ud.department_id);
+        
         return {
           id: ur.user_id,
           email: profile?.email || '',
           fullName: profile?.full_name || 'Sem nome',
           role: ur.role as AppRole,
           departmentId: ur.department_id,
-          approvalStatus: ur.approval_status as ApprovalStatus
+          approvalStatus: ur.approval_status as ApprovalStatus,
+          assignedDepartments: deptIds
         };
       });
       
@@ -131,6 +155,12 @@ const UserManagement: React.FC = () => {
     setSelectedDepartment(user.departmentId || '');
     setIsPromoteDialogOpen(true);
   };
+
+  const openDepartmentDialog = (user: UserWithRole) => {
+    setSelectedUser(user);
+    setSelectedDepartments(user.assignedDepartments || []);
+    setIsDepartmentDialogOpen(true);
+  };
   
   const handlePromote = async () => {
     if (!selectedUser) return;
@@ -158,13 +188,82 @@ const UserManagement: React.FC = () => {
       setIsPromoteDialogOpen(false);
     }
   };
+
+  const handleSaveDepartments = async () => {
+    if (!selectedUser) return;
+    
+    setIsSaving(true);
+    try {
+      // Delete existing department assignments for this user
+      const { error: deleteError } = await supabase
+        .from('user_departments')
+        .delete()
+        .eq('user_id', selectedUser.id);
+      
+      if (deleteError) throw deleteError;
+      
+      // Insert new department assignments
+      if (selectedDepartments.length > 0) {
+        const inserts = selectedDepartments.map(deptId => ({
+          user_id: selectedUser.id,
+          department_id: deptId
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('user_departments')
+          .insert(inserts);
+        
+        if (insertError) throw insertError;
+      }
+
+      // Also link to member record if profile has member_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('member_id')
+        .eq('id', selectedUser.id)
+        .single();
+      
+      // Update the user in the list
+      setUsers(current => 
+        current.map(user => 
+          user.id === selectedUser.id 
+            ? { ...user, assignedDepartments: selectedDepartments } 
+            : user
+        )
+      );
+      
+      toast({
+        title: "Departamentos atualizados",
+        description: `${selectedUser.fullName} foi atribuído a ${selectedDepartments.length} departamento(s).`,
+      });
+      
+      setIsDepartmentDialogOpen(false);
+    } catch (error) {
+      logger.error('Error saving departments:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível atualizar os departamentos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleDepartment = (deptId: string) => {
+    setSelectedDepartments(prev => 
+      prev.includes(deptId) 
+        ? prev.filter(id => id !== deptId)
+        : [...prev, deptId]
+    );
+  };
   
   const getRoleBadge = (role: AppRole) => {
     switch (role) {
       case 'admin':
         return <Badge className="bg-red-100 text-red-800 border-red-200">Administrador</Badge>;
       case 'department_leader':
-        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Líder de Departamento</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Líder</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Membro</Badge>;
     }
@@ -173,11 +272,11 @@ const UserManagement: React.FC = () => {
   const getApprovalBadge = (status: ApprovalStatus) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-green-100 text-green-800 border-green-200">Aprovado</Badge>;
+        return <Badge className="bg-green-100 text-green-800 border-green-200"><Check className="h-3 w-3 mr-1" />Aprovado</Badge>;
       case 'pending':
         return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Pendente</Badge>;
       case 'rejected':
-        return <Badge className="bg-red-100 text-red-800 border-red-200">Rejeitado</Badge>;
+        return <Badge className="bg-red-100 text-red-800 border-red-200"><X className="h-3 w-3 mr-1" />Rejeitado</Badge>;
       default:
         return null;
     }
@@ -194,7 +293,13 @@ const UserManagement: React.FC = () => {
   const getDepartmentName = (departmentId?: string | null) => {
     if (!departmentId) return 'Sem departamento';
     const department = departments.find(d => d.id === departmentId);
-    return department ? department.name : 'Departamento não encontrado';
+    return department ? department.name : 'Não encontrado';
+  };
+
+  // Get departments that the current user can assign
+  const getAssignableDepartments = () => {
+    // For now, return all departments - RLS will handle permissions
+    return departments;
   };
   
   if (isLoading) {
@@ -254,22 +359,57 @@ const UserManagement: React.FC = () => {
                     
                     {user.role === 'department_leader' && (
                       <>
-                        <p className="text-gray-500">Departamento:</p>
+                        <p className="text-gray-500">Lidera:</p>
                         <p>{getDepartmentName(user.departmentId)}</p>
                       </>
                     )}
-                    
-                    <p className="text-gray-500">Status:</p>
-                    <p>{user.approvalStatus === 'approved' ? 'Aprovado' : user.approvalStatus === 'pending' ? 'Pendente' : 'Rejeitado'}</p>
                   </div>
                   
-                  <Button 
-                    onClick={() => openPromoteDialog(user)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <UserCog className="h-4 w-4 mr-2" /> Alterar Função
-                  </Button>
+                  {/* Assigned departments */}
+                  <div>
+                    <p className="text-sm text-gray-500 mb-2">Departamentos atribuídos:</p>
+                    {user.assignedDepartments.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.assignedDepartments.map(deptId => {
+                          const dept = departments.find(d => d.id === deptId);
+                          return dept ? (
+                            <Badge 
+                              key={deptId} 
+                              variant="outline"
+                              style={{ 
+                                backgroundColor: dept.color ? `${dept.color}20` : undefined,
+                                borderColor: dept.color || undefined
+                              }}
+                            >
+                              {dept.name}
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">Nenhum departamento atribuído</p>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      onClick={() => openDepartmentDialog(user)}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={user.approvalStatus !== 'approved'}
+                    >
+                      <Building2 className="h-4 w-4 mr-2" /> Departamentos
+                    </Button>
+                    {isAdmin && (
+                      <Button 
+                        onClick={() => openPromoteDialog(user)}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <UserCog className="h-4 w-4 mr-2" /> Função
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -327,6 +467,53 @@ const UserManagement: React.FC = () => {
             </Button>
             <Button onClick={handlePromote}>
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Department Assignment Dialog */}
+      <Dialog open={isDepartmentDialogOpen} onOpenChange={setIsDepartmentDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atribuir Departamentos</DialogTitle>
+            <DialogDescription>
+              Selecione os departamentos para {selectedUser?.fullName}.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4 max-h-[300px] overflow-y-auto">
+            {getAssignableDepartments().map(dept => (
+              <div 
+                key={dept.id} 
+                className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
+                onClick={() => toggleDepartment(dept.id)}
+              >
+                <Checkbox 
+                  checked={selectedDepartments.includes(dept.id)}
+                  onCheckedChange={() => toggleDepartment(dept.id)}
+                />
+                <div className="flex-1">
+                  <p className="font-medium">{dept.name}</p>
+                  {dept.description && (
+                    <p className="text-sm text-muted-foreground">{dept.description}</p>
+                  )}
+                </div>
+                <div 
+                  className="w-4 h-4 rounded-full" 
+                  style={{ backgroundColor: dept.color || 'hsl(var(--primary))' }}
+                />
+              </div>
+            ))}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDepartmentDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveDepartments} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
