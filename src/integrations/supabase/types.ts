@@ -69,7 +69,7 @@ export type Database = {
             foreignKeyName: "checkins_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
-            referencedRelation: "members"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -375,7 +375,7 @@ export type Database = {
             foreignKeyName: "schedules_member_id_fkey"
             columns: ["member_id"]
             isOneToOne: false
-            referencedRelation: "members"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
