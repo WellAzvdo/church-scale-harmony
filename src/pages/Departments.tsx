@@ -1,13 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import { Department } from '@/lib/models';
-import * as storage from '@/lib/storage';
-import { generateId } from '@/lib/scheduleUtils';
+import { Plus, Search, Edit, Trash2, Loader2 } from 'lucide-react';
+import type { Department } from '@/lib/database.types';
+import * as db from '@/services/supabaseService';
 import DepartmentForm from '@/components/departments/DepartmentForm';
 import { logger } from '@/lib/logger';
 
@@ -15,6 +13,7 @@ const Departments: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const { toast } = useToast();
 
@@ -24,7 +23,8 @@ const Departments: React.FC = () => {
 
   const loadDepartments = async () => {
     try {
-      const loadedDepartments = await storage.getDepartments();
+      setIsLoading(true);
+      const loadedDepartments = await db.getDepartments();
       setDepartments(loadedDepartments);
     } catch (error) {
       logger.error('Error loading departments:', error);
@@ -33,6 +33,8 @@ const Departments: React.FC = () => {
         description: "Não foi possível carregar a lista de departamentos.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -48,7 +50,7 @@ const Departments: React.FC = () => {
 
   const handleDeleteDepartment = async (departmentId: string) => {
     try {
-      await storage.deleteDepartment(departmentId);
+      await db.deleteDepartment(departmentId);
       toast({
         title: "Departamento excluído",
         description: "O departamento foi excluído com sucesso.",
@@ -66,30 +68,21 @@ const Departments: React.FC = () => {
 
   const handleSaveDepartment = async (departmentData: Partial<Department>) => {
     try {
-      const now = Date.now();
-      let department: Department;
-      
       if (editingDepartment) {
-        department = {
-          ...editingDepartment,
-          ...departmentData,
-          updatedAt: now,
-          syncStatus: 'pending'
-        } as Department;
-      } else {
-        department = {
-          id: generateId(),
-          name: departmentData.name || '',
+        await db.updateDepartment(editingDepartment.id, {
+          name: departmentData.name,
           description: departmentData.description,
+          color: departmentData.color
+        });
+      } else {
+        await db.createDepartment({
+          name: departmentData.name || '',
+          description: departmentData.description || null,
           color: departmentData.color || '#3a7ca5',
-          positions: departmentData.positions || [],
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: 'pending'
-        };
+          leader_id: null
+        });
       }
       
-      await storage.saveDepartment(department);
       setIsFormOpen(false);
       toast({
         title: editingDepartment ? "Departamento atualizado" : "Departamento adicionado",
@@ -135,7 +128,11 @@ const Departments: React.FC = () => {
         />
       </div>
 
-      {filteredDepartments.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : filteredDepartments.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-muted-foreground">Nenhum departamento encontrado.</p>
         </div>
@@ -173,21 +170,6 @@ const Departments: React.FC = () => {
               <CardContent className="p-4 pt-0">
                 {department.description && (
                   <p className="text-sm text-muted-foreground">{department.description}</p>
-                )}
-                {department.positions && department.positions.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground">Funções:</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {department.positions.map((position) => (
-                        <span 
-                          key={position.id} 
-                          className="text-xs bg-secondary px-2 py-0.5 rounded-full"
-                        >
-                          {position.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
                 )}
               </CardContent>
             </Card>
