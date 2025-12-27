@@ -126,6 +126,66 @@ export async function getMembers(): Promise<Member[]> {
   return data || [];
 }
 
+// Get approved users assigned to a specific department (for scale creation)
+export async function getApprovedUsersForDepartment(departmentId: string): Promise<Profile[]> {
+  // Get user_ids assigned to this department
+  const { data: userDepts, error: udError } = await supabase
+    .from('user_departments')
+    .select('user_id')
+    .eq('department_id', departmentId);
+  
+  if (udError) throw udError;
+  if (!userDepts || userDepts.length === 0) return [];
+  
+  const userIds = [...new Set(userDepts.map(ud => ud.user_id))];
+  
+  // Get approved users from user_roles
+  const { data: approvedRoles, error: rolesError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .in('user_id', userIds)
+    .eq('approval_status', 'approved');
+  
+  if (rolesError) throw rolesError;
+  if (!approvedRoles || approvedRoles.length === 0) return [];
+  
+  const approvedUserIds = approvedRoles.map(r => r.user_id);
+  
+  // Get profiles for approved users
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', approvedUserIds)
+    .order('full_name');
+  
+  if (profilesError) throw profilesError;
+  return profiles || [];
+}
+
+// Get all approved users (for admins)
+export async function getAllApprovedUsers(): Promise<Profile[]> {
+  // Get approved user_ids
+  const { data: approvedRoles, error: rolesError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('approval_status', 'approved');
+  
+  if (rolesError) throw rolesError;
+  if (!approvedRoles || approvedRoles.length === 0) return [];
+  
+  const approvedUserIds = approvedRoles.map(r => r.user_id);
+  
+  // Get profiles for approved users
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', approvedUserIds)
+    .order('full_name');
+  
+  if (profilesError) throw profilesError;
+  return profiles || [];
+}
+
 export async function getMembersByDepartment(departmentId: string): Promise<Member[]> {
   // Get all member_positions for this department's positions
   const { data: positions, error: posError } = await supabase

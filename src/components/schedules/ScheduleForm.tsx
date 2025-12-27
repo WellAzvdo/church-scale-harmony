@@ -18,8 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from 'lucide-react';
-import type { Schedule, Member, Department, Position } from '@/lib/database.types';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import type { Schedule, Profile, Department, Position } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
 import { format } from 'date-fns';
 import { logger } from '@/lib/logger';
@@ -39,7 +39,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   onCancel 
 }) => {
   const { user, checkPermission } = useAuth();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<Profile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [memberId, setMemberId] = useState(schedule?.member_id || '');
@@ -47,7 +47,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   const [positionId, setPositionId] = useState(schedule?.position_id || '');
   const [notes, setNotes] = useState(schedule?.notes || '');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -61,11 +61,11 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
   useEffect(() => {
     if (departmentId) {
       loadPositions(departmentId);
-      loadMembersForDepartment(departmentId);
+      loadUsersForDepartment(departmentId);
     } else {
       setPositions([]);
       setPositionId('');
-      setMembers([]);
+      setAvailableUsers([]);
     }
   }, [departmentId]);
 
@@ -93,10 +93,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       // If editing, load the initial data
       if (schedule?.department_id) {
         await loadPositions(schedule.department_id);
-        await loadMembersForDepartment(schedule.department_id);
+        await loadUsersForDepartment(schedule.department_id);
       } else if (isLeader && user?.departmentId) {
         await loadPositions(user.departmentId);
-        await loadMembersForDepartment(user.departmentId);
+        await loadUsersForDepartment(user.departmentId);
       }
     } catch (error) {
       logger.error('Error loading data:', error);
@@ -108,29 +108,30 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
     }
   };
 
-  const loadMembersForDepartment = async (deptId: string) => {
-    setIsLoadingMembers(true);
+  const loadUsersForDepartment = async (deptId: string) => {
+    setIsLoadingUsers(true);
     try {
-      // For admins, show all members. For leaders, show members from their department.
-      let loadedMembers: Member[];
-      if (isAdmin) {
-        // Admins can see all members, but we still filter by department for better UX
-        loadedMembers = await db.getMembersByDepartment(deptId);
-        // If no members found for department, show all members as fallback
-        if (loadedMembers.length === 0) {
-          loadedMembers = await db.getMembers();
-        }
-      } else {
-        loadedMembers = await db.getMembersByDepartment(deptId);
+      // Get approved users assigned to this department
+      let users = await db.getApprovedUsersForDepartment(deptId);
+      
+      // If admin and no users found, fallback to all approved users
+      if (isAdmin && users.length === 0) {
+        users = await db.getAllApprovedUsers();
       }
-      setMembers(loadedMembers);
+      
+      setAvailableUsers(users);
     } catch (error) {
-      logger.error('Error loading members:', error);
-      // Fallback to all members
-      const allMembers = await db.getMembers();
-      setMembers(allMembers);
+      logger.error('Error loading users:', error);
+      // Fallback to all approved users
+      try {
+        const allUsers = await db.getAllApprovedUsers();
+        setAvailableUsers(allUsers);
+      } catch (fallbackError) {
+        logger.error('Fallback also failed:', fallbackError);
+        setAvailableUsers([]);
+      }
     } finally {
-      setIsLoadingMembers(false);
+      setIsLoadingUsers(false);
     }
   };
 
@@ -161,9 +162,9 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       );
 
       if (hasConflict && conflictDepartment) {
-        const member = members.find(m => m.id === memberId);
+        const selectedUser = availableUsers.find(u => u.id === memberId);
         setConflictWarning(
-          `⚠️ Atenção: ${member?.name || 'Este membro'} já está escalado no departamento ${conflictDepartment.name} no dia ${new Date(formattedDate).toLocaleDateString('pt-BR')}.`
+          `⚠️ Atenção: ${selectedUser?.full_name || 'Este membro'} já está escalado no departamento ${conflictDepartment.name} no dia ${new Date(formattedDate).toLocaleDateString('pt-BR')}.`
         );
       } else {
         setConflictWarning(null);
@@ -256,24 +257,6 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="member">Membro</Label>
-            <Select value={memberId} onValueChange={setMemberId}>
-              <SelectTrigger id="member">
-                <SelectValue placeholder="Selecione um membro" />
-              </SelectTrigger>
-              <SelectContent>
-                {members.length === 0 ? (
-                  <SelectItem value="none" disabled>Nenhum membro cadastrado</SelectItem>
-                ) : (
-                  members.map(member => (
-                    <SelectItem key={member.id} value={member.id}>{member.name}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
             <Label htmlFor="department">Departamento</Label>
             <Select value={departmentId} onValueChange={setDepartmentId} disabled={isLeader}>
               <SelectTrigger id="department">
@@ -289,6 +272,42 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
                 )}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="member">Membro</Label>
+            <Select value={memberId} onValueChange={setMemberId} disabled={!departmentId || isLoadingUsers}>
+              <SelectTrigger id="member">
+                <SelectValue placeholder={
+                  !departmentId 
+                    ? "Selecione um departamento primeiro" 
+                    : isLoadingUsers 
+                      ? "Carregando..." 
+                      : "Selecione um membro"
+                } />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingUsers ? (
+                  <div className="flex items-center justify-center p-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : availableUsers.length === 0 ? (
+                  <SelectItem value="none" disabled>
+                    Nenhum membro atribuído a este departamento
+                  </SelectItem>
+                ) : (
+                  availableUsers.map(user => (
+                    <SelectItem key={user.id} value={user.id}>{user.full_name}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            {departmentId && !isLoadingUsers && availableUsers.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Nenhum membro foi atribuído a este departamento ainda.
+                Atribua membros na tela de Usuários.
+              </p>
+            )}
           </div>
           
           <div className="space-y-2">
