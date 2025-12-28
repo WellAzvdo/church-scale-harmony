@@ -19,8 +19,9 @@ const Schedules: React.FC = () => {
   
   const { 
     schedules, 
-    members, 
-    departments, 
+    profiles,
+    departments,
+    positions,
     loadSchedules, 
     handleDeleteSchedule,
     isLoading 
@@ -72,8 +73,9 @@ const Schedules: React.FC = () => {
       ) : (
         <SchedulesList 
           schedules={schedules}
-          members={members}
+          profiles={profiles}
           departments={departments}
+          positions={positions}
           onEditSchedule={canManageSchedules ? handleEditSchedule : undefined}
           onDeleteSchedule={canManageSchedules ? handleDeleteSchedule : undefined}
         />

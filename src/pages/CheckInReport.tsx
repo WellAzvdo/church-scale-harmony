@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -9,30 +8,26 @@ import {
   Clock, 
   AlertCircle, 
   FileText, 
-  Calendar,
   Users
 } from 'lucide-react';
-import { Schedule, CheckInStatus, Member, Department, CheckIn } from '@/lib/models';
 import { useAuth, Permission } from '@/contexts/AuthContext';
-import * as storage from '@/lib/storage';
-import { 
-  getTodayDate, 
-  getStatusLabel,
-  getStatusColor
-} from '@/lib/checkinUtils';
+import * as db from '@/services/supabaseService';
+import DateSelector from '@/components/schedules/DateSelector';
 import { logger } from '@/lib/logger';
+import type { Schedule, Department, Position, Profile, Checkin, CheckinStatus } from '@/lib/database.types';
 
 interface ReportEntry {
   schedule: Schedule;
-  member: Member | null;
+  profile: Profile | null;
   department: Department | null;
-  checkIn: CheckIn | null;
-  status: CheckInStatus;
+  position: Position | null;
+  checkIn: Checkin | null;
+  status: CheckinStatus;
 }
 
 const CheckInReport: React.FC = () => {
   const [reportData, setReportData] = useState<ReportEntry[]>([]);
-  const [selectedDate, setSelectedDate] = useState(getTodayDate());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const { user, checkPermission } = useAuth();
@@ -43,41 +38,53 @@ const CheckInReport: React.FC = () => {
     loadReport();
   }, [selectedDate, user]);
 
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const loadReport = async () => {
     setIsLoading(true);
     try {
-      const allSchedules = await storage.getSchedules();
-      const members = await storage.getMembers();
-      const departments = await storage.getDepartments();
-      const checkIns = await storage.getCheckInsByDate(selectedDate);
-
-      // Filter schedules for selected date
-      let dateSchedules = allSchedules.filter(s => s.date === selectedDate);
+      const formattedDate = formatDate(selectedDate);
       
-      // If department leader, filter by department
+      // Fetch all required data from Supabase
+      const [allSchedules, profiles, departments, positions, checkIns] = await Promise.all([
+        db.getSchedules(formattedDate),
+        db.getAllApprovedUsers(),
+        db.getDepartments(),
+        db.getPositions(),
+        db.getCheckins(formattedDate)
+      ]);
+
+      // Filter schedules based on user permissions
+      let dateSchedules = allSchedules;
       if (!canViewAll && user?.departmentId) {
-        dateSchedules = dateSchedules.filter(s => s.departmentId === user.departmentId);
+        dateSchedules = dateSchedules.filter(s => s.department_id === user.departmentId);
       }
 
       const entries: ReportEntry[] = dateSchedules.map(schedule => {
-        const checkIn = checkIns.find(c => c.scheduleId === schedule.id) || null;
-        const member = members.find(m => m.id === schedule.memberId) || null;
-        const department = departments.find(d => d.id === schedule.departmentId) || null;
+        const checkIn = checkIns.find(c => c.schedule_id === schedule.id) || null;
+        const profile = profiles.find(p => p.id === schedule.member_id) || null;
+        const department = departments.find(d => d.id === schedule.department_id) || null;
+        const position = positions.find(p => p.id === schedule.position_id) || null;
         
         // Determine status
-        let status = CheckInStatus.PENDING;
+        let status: CheckinStatus = 'pending';
         if (checkIn) {
           status = checkIn.status;
         } else {
           // If no check-in and past service end time, mark as absent
           const now = new Date();
-          const today = getTodayDate();
-          if (selectedDate < today || (selectedDate === today && now.getHours() >= 21)) {
-            status = CheckInStatus.ABSENT;
+          const today = formatDate(now);
+          if (formattedDate < today || (formattedDate === today && now.getHours() >= 21)) {
+            status = 'absent';
           }
         }
 
-        return { schedule, member, department, checkIn, status };
+        return { schedule, profile, department, position, checkIn, status };
       });
 
       setReportData(entries);
@@ -93,7 +100,7 @@ const CheckInReport: React.FC = () => {
     }
   };
 
-  const getEntriesByStatus = (status: CheckInStatus) => {
+  const getEntriesByStatus = (status: CheckinStatus) => {
     return reportData.filter(e => e.status === status);
   };
 
@@ -109,48 +116,54 @@ const CheckInReport: React.FC = () => {
     return grouped;
   };
 
-  const formatCheckInTime = (isoString?: string) => {
+  const formatCheckInTime = (isoString?: string | null) => {
     if (!isoString) return '-';
     const date = new Date(isoString);
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
 
-  const formatDateDisplay = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
+  const getStatusLabel = (status: CheckinStatus): string => {
+    const labels: Record<CheckinStatus, string> = {
+      'pending': 'Aguardando',
+      'on_time': 'Adimplente',
+      'late': 'Atrasado',
+      'absent': 'Faltoso'
+    };
+    return labels[status] || status;
   };
 
-  const onTimeCount = getEntriesByStatus(CheckInStatus.ON_TIME).length;
-  const lateCount = getEntriesByStatus(CheckInStatus.LATE).length;
-  const absentCount = getEntriesByStatus(CheckInStatus.ABSENT).length;
-  const pendingCount = getEntriesByStatus(CheckInStatus.PENDING).length;
+  const getStatusColor = (status: CheckinStatus): string => {
+    const colors: Record<CheckinStatus, string> = {
+      'pending': 'bg-gray-500',
+      'on_time': 'bg-green-500',
+      'late': 'bg-yellow-500',
+      'absent': 'bg-red-500'
+    };
+    return colors[status] || 'bg-gray-500';
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+    }
+  };
+
+  const onTimeCount = getEntriesByStatus('on_time').length;
+  const lateCount = getEntriesByStatus('late').length;
+  const absentCount = getEntriesByStatus('absent').length;
+  const pendingCount = getEntriesByStatus('pending').length;
 
   return (
     <div className="p-4 pb-20">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-primary-deep">Relatório de Check-in</h1>
-          <p className="text-sm text-muted-foreground flex items-center gap-1">
-            <Calendar className="h-4 w-4" />
-            {formatDateDisplay(selectedDate)}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold text-primary-deep">Relatório de Check-in</h1>
       </div>
 
-      {/* Date selector */}
-      <Card className="mb-4">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Data:</label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Date selector - same component as Schedules screen */}
+      <DateSelector 
+        selectedDate={selectedDate}
+        onDateSelect={handleDateSelect}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -215,12 +228,15 @@ const CheckInReport: React.FC = () => {
 
           <TabsContent value="all">
             <div className="space-y-3">
-              {reportData.map(({ schedule, member, department, checkIn, status }) => (
+              {reportData.map(({ schedule, profile, department, position, checkIn, status }) => (
                 <Card key={schedule.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">{member?.name || 'Membro'}</p>
+                        <p className="font-medium">{profile?.full_name || 'Membro'}</p>
+                        {position && (
+                          <p className="text-sm text-primary font-medium">{position.name}</p>
+                        )}
                         <p className="text-sm text-muted-foreground">{department?.name}</p>
                       </div>
                       <div className="text-right">
@@ -228,7 +244,7 @@ const CheckInReport: React.FC = () => {
                           {getStatusLabel(status)}
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {checkIn ? formatCheckInTime(checkIn.checkInTime) : '-'}
+                          {checkIn ? formatCheckInTime(checkIn.checkin_time) : '-'}
                         </p>
                       </div>
                     </div>
@@ -247,13 +263,18 @@ const CheckInReport: React.FC = () => {
                     <CheckCircle className="h-4 w-4" /> Adimplentes ({onTimeCount})
                   </h3>
                   <div className="space-y-2">
-                    {getEntriesByStatus(CheckInStatus.ON_TIME).map(({ schedule, member, department, checkIn }) => (
+                    {getEntriesByStatus('on_time').map(({ schedule, profile, position, checkIn }) => (
                       <Card key={schedule.id} className="bg-green-50 border-green-200">
                         <CardContent className="p-3">
                           <div className="flex justify-between items-center">
-                            <span>{member?.name}</span>
+                            <div>
+                              <span className="font-medium">{profile?.full_name}</span>
+                              {position && (
+                                <span className="text-sm text-green-600 ml-2">• {position.name}</span>
+                              )}
+                            </div>
                             <span className="text-sm text-green-600">
-                              {formatCheckInTime(checkIn?.checkInTime)}
+                              {formatCheckInTime(checkIn?.checkin_time)}
                             </span>
                           </div>
                         </CardContent>
@@ -270,13 +291,18 @@ const CheckInReport: React.FC = () => {
                     <Clock className="h-4 w-4" /> Atrasados ({lateCount})
                   </h3>
                   <div className="space-y-2">
-                    {getEntriesByStatus(CheckInStatus.LATE).map(({ schedule, member, department, checkIn }) => (
+                    {getEntriesByStatus('late').map(({ schedule, profile, position, checkIn }) => (
                       <Card key={schedule.id} className="bg-yellow-50 border-yellow-200">
                         <CardContent className="p-3">
                           <div className="flex justify-between items-center">
-                            <span>{member?.name}</span>
+                            <div>
+                              <span className="font-medium">{profile?.full_name}</span>
+                              {position && (
+                                <span className="text-sm text-yellow-600 ml-2">• {position.name}</span>
+                              )}
+                            </div>
                             <span className="text-sm text-yellow-600">
-                              {formatCheckInTime(checkIn?.checkInTime)}
+                              {formatCheckInTime(checkIn?.checkin_time)}
                             </span>
                           </div>
                         </CardContent>
@@ -293,10 +319,15 @@ const CheckInReport: React.FC = () => {
                     <AlertCircle className="h-4 w-4" /> Faltosos ({absentCount})
                   </h3>
                   <div className="space-y-2">
-                    {getEntriesByStatus(CheckInStatus.ABSENT).map(({ schedule, member }) => (
+                    {getEntriesByStatus('absent').map(({ schedule, profile, position }) => (
                       <Card key={schedule.id} className="bg-red-50 border-red-200">
                         <CardContent className="p-3">
-                          <span>{member?.name}</span>
+                          <div>
+                            <span className="font-medium">{profile?.full_name}</span>
+                            {position && (
+                              <span className="text-sm text-red-600 ml-2">• {position.name}</span>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -312,11 +343,16 @@ const CheckInReport: React.FC = () => {
                 <div key={deptName}>
                   <h3 className="font-semibold text-primary-deep mb-2">{deptName}</h3>
                   <div className="space-y-2">
-                    {entries.map(({ schedule, member, checkIn, status }) => (
+                    {entries.map(({ schedule, profile, position, checkIn, status }) => (
                       <Card key={schedule.id}>
                         <CardContent className="p-3">
                           <div className="flex justify-between items-center">
-                            <span>{member?.name}</span>
+                            <div>
+                              <span className="font-medium">{profile?.full_name}</span>
+                              {position && (
+                                <span className="text-sm text-muted-foreground ml-2">• {position.name}</span>
+                              )}
+                            </div>
                             <Badge className={`${getStatusColor(status)} text-white text-xs`}>
                               {getStatusLabel(status)}
                             </Badge>
