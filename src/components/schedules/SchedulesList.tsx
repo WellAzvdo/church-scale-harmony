@@ -1,30 +1,37 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Schedule, Member, Department } from '@/lib/database.types';
+import type { Schedule, Department, Position, Profile } from '@/lib/database.types';
 
 interface SchedulesListProps {
   schedules: Schedule[];
-  members: Member[];
+  profiles: Profile[];
   departments: Department[];
+  positions: Position[];
   onEditSchedule?: (schedule: Schedule) => void;
   onDeleteSchedule?: (scheduleId: string) => void;
 }
 
 const SchedulesList: React.FC<SchedulesListProps> = ({
   schedules,
-  members,
+  profiles,
   departments,
+  positions,
   onEditSchedule,
   onDeleteSchedule,
 }) => {
   const getMemberName = (memberId: string) => {
-    const member = members.find(m => m.id === memberId);
-    return member ? member.name : 'Membro não encontrado';
+    // member_id now references profiles.id
+    const profile = profiles.find(p => p.id === memberId);
+    return profile ? profile.full_name : 'Membro não encontrado';
   };
 
   const getDepartment = (departmentId: string) => {
     return departments.find(d => d.id === departmentId);
+  };
+
+  const getPosition = (positionId: string) => {
+    return positions.find(p => p.id === positionId);
   };
 
   const groupSchedulesByDepartment = () => {
@@ -66,43 +73,50 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
             </div>
             <CardContent className="p-0">
               <ul className="divide-y">
-                {departmentSchedules.map(schedule => (
-                  <li key={schedule.id} className="p-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-medium">{getMemberName(schedule.member_id)}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(schedule.date).toLocaleDateString('pt-BR')}
-                        </p>
-                        {schedule.notes && (
-                          <p className="text-xs italic mt-1">{schedule.notes}</p>
-                        )}
-                      </div>
-                      {(canEdit || canDelete) && (
-                        <div className="flex space-x-2">
-                          {canEdit && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => onEditSchedule(schedule)}
-                            >
-                              Editar
-                            </Button>
+                {departmentSchedules.map(schedule => {
+                  const position = getPosition(schedule.position_id);
+                  
+                  return (
+                    <li key={schedule.id} className="p-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-medium">{getMemberName(schedule.member_id)}</h4>
+                          {position && (
+                            <p className="text-sm text-primary font-medium">{position.name}</p>
                           )}
-                          {canDelete && (
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onClick={() => onDeleteSchedule(schedule.id)}
-                            >
-                              Remover
-                            </Button>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(schedule.date).toLocaleDateString('pt-BR')}
+                          </p>
+                          {schedule.notes && (
+                            <p className="text-xs italic mt-1">{schedule.notes}</p>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        {(canEdit || canDelete) && (
+                          <div className="flex space-x-2">
+                            {canEdit && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => onEditSchedule(schedule)}
+                              >
+                                Editar
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button 
+                                variant="destructive" 
+                                size="sm"
+                                onClick={() => onDeleteSchedule(schedule.id)}
+                              >
+                                Remover
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </CardContent>
           </Card>

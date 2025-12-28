@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import type { Schedule, Member, Department, AppRole } from '@/lib/database.types';
+import type { Schedule, Department, Position, Profile, AppRole } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
 import { logger } from '@/lib/logger';
 
@@ -13,20 +13,23 @@ interface AuthUser {
 
 export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | null = null) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [loadedMembers, loadedDepartments] = await Promise.all([
-        db.getMembers(),
-        db.getDepartments()
+      const [loadedProfiles, loadedDepartments, loadedPositions] = await Promise.all([
+        db.getAllApprovedUsers(),
+        db.getDepartments(),
+        db.getPositions()
       ]);
-      setMembers(loadedMembers);
+      setProfiles(loadedProfiles);
       setDepartments(loadedDepartments);
+      setPositions(loadedPositions);
       await loadSchedules();
     } catch (error) {
       logger.error('Error loading data:', error);
@@ -50,9 +53,9 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
       // Apply user role-based filtering
       if (currentUser) {
         if (currentUser.role === 'member' && currentUser.memberId) {
-          // Members can only see their own schedules
+          // Members can only see their own schedules (memberId here refers to profile.id)
           allSchedules = allSchedules.filter(
-            schedule => schedule.member_id === currentUser.memberId
+            schedule => schedule.member_id === currentUser.id
           );
         } else if (currentUser.role === 'department_leader' && currentUser.departmentId) {
           // Department leaders can only see schedules for their department
@@ -104,8 +107,9 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
 
   return {
     schedules,
-    members,
+    profiles,
     departments,
+    positions,
     isLoading,
     loadSchedules,
     handleDeleteSchedule
