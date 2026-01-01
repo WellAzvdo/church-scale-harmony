@@ -6,11 +6,18 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { Department, Position } from '@/lib/database.types';
+import type { Department, Position, Profile } from '@/lib/database.types';
 import * as db from '@/services/supabaseService';
 import { Trash2, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
@@ -25,17 +32,33 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({ department, onSave, onC
   const [name, setName] = useState(department?.name || '');
   const [description, setDescription] = useState(department?.description || '');
   const [color, setColor] = useState(department?.color || '#3a7ca5');
+  const [leaderId, setLeaderId] = useState<string | null>(department?.leader_id || null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [newPositionName, setNewPositionName] = useState('');
   const [isLoadingPositions, setIsLoadingPositions] = useState(false);
   const [isSavingPosition, setIsSavingPosition] = useState(false);
+  const [availableLeaders, setAvailableLeaders] = useState<Profile[]>([]);
+  const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
+    loadLeaders();
     if (department?.id) {
       loadPositions(department.id);
     }
   }, [department?.id]);
+
+  const loadLeaders = async () => {
+    setIsLoadingLeaders(true);
+    try {
+      const leaders = await db.getAllApprovedUsers();
+      setAvailableLeaders(leaders);
+    } catch (error) {
+      console.error('Error loading leaders:', error);
+    } finally {
+      setIsLoadingLeaders(false);
+    }
+  };
 
   const loadPositions = async (departmentId: string) => {
     setIsLoadingPositions(true);
@@ -99,7 +122,8 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({ department, onSave, onC
     onSave({
       name,
       description: description || null,
-      color
+      color,
+      leader_id: leaderId
     });
   };
   
@@ -133,6 +157,26 @@ const DepartmentForm: React.FC<DepartmentFormProps> = ({ department, onSave, onC
               placeholder="Descrição do departamento..."
               rows={3}
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="leader">Líder</Label>
+            <Select 
+              value={leaderId || ''} 
+              onValueChange={(value) => setLeaderId(value === 'none' ? null : value)}
+            >
+              <SelectTrigger id="leader">
+                <SelectValue placeholder={isLoadingLeaders ? "Carregando..." : "Selecione um líder"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum líder</SelectItem>
+                {availableLeaders.map(leader => (
+                  <SelectItem key={leader.id} value={leader.id}>
+                    {leader.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="space-y-2">
