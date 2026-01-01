@@ -68,19 +68,32 @@ const Departments: React.FC = () => {
 
   const handleSaveDepartment = async (departmentData: Partial<Department>) => {
     try {
+      let savedDepartment: Department;
+      
       if (editingDepartment) {
-        await db.updateDepartment(editingDepartment.id, {
+        savedDepartment = await db.updateDepartment(editingDepartment.id, {
           name: departmentData.name,
           description: departmentData.description,
-          color: departmentData.color
+          color: departmentData.color,
+          leader_id: departmentData.leader_id
         });
       } else {
-        await db.createDepartment({
+        savedDepartment = await db.createDepartment({
           name: departmentData.name || '',
           description: departmentData.description || null,
           color: departmentData.color || '#3a7ca5',
-          leader_id: null
+          leader_id: departmentData.leader_id || null
         });
+      }
+      
+      // If a leader was assigned, update their role to department_leader
+      if (departmentData.leader_id) {
+        try {
+          await db.updateUserRole(departmentData.leader_id, 'department_leader', savedDepartment.id);
+        } catch (roleError) {
+          logger.error('Error updating leader role:', roleError);
+          // Don't fail the whole operation if role update fails
+        }
       }
       
       setIsFormOpen(false);

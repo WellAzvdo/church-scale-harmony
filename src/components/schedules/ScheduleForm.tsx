@@ -79,9 +79,9 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       // Load departments
       let loadedDepartments = await db.getDepartments();
       
-      // For leaders, only show their department
-      if (isLeader && user?.departmentId) {
-        loadedDepartments = loadedDepartments.filter(d => d.id === user.departmentId);
+      // For leaders, only show departments they lead (by leader_id)
+      if (isLeader && user?.id) {
+        loadedDepartments = loadedDepartments.filter(d => d.leader_id === user.id);
         // Auto-select the leader's department
         if (loadedDepartments.length === 1 && !departmentId) {
           setDepartmentId(loadedDepartments[0].id);
@@ -94,9 +94,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       if (schedule?.department_id) {
         await loadPositions(schedule.department_id);
         await loadUsersForDepartment(schedule.department_id);
-      } else if (isLeader && user?.departmentId) {
-        await loadPositions(user.departmentId);
-        await loadUsersForDepartment(user.departmentId);
+      } else if (isLeader && loadedDepartments.length === 1) {
+        // Auto-load for leader's department
+        await loadPositions(loadedDepartments[0].id);
+        await loadUsersForDepartment(loadedDepartments[0].id);
       }
     } catch (error) {
       logger.error('Error loading data:', error);
