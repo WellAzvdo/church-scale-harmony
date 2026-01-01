@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -6,14 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { LogOut } from 'lucide-react';
 import { syncAll, isOnline } from '@/lib/sync';
 import * as storage from '@/lib/storage';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Settings: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnlineStatus, setIsOnlineStatus] = useState<boolean | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { logout } = useAuth();
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -84,7 +86,17 @@ const Settings: React.FC = () => {
 
   return (
     <div className="p-4 pb-20">
-      <h1 className="text-2xl font-bold text-primary-deep mb-6">Configurações</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-primary-deep">Configurações</h1>
+        <Button 
+          variant="outline" 
+          onClick={logout}
+          className="gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </Button>
+      </div>
       
       <div className="space-y-6">
         <Card>
