@@ -486,6 +486,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_user_in_leader_department: {
+        Args: { _leader_id: string; _target_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "member" | "department_leader" | "admin"
