@@ -53,6 +53,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
 
   const isAdmin = checkPermission(Permission.MANAGE_ALL);
   const isLeader = user?.role === 'department_leader';
+  const [leaderDepartmentCount, setLeaderDepartmentCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -82,7 +83,9 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       // For leaders, only show departments they lead (by leader_id)
       if (isLeader && user?.id) {
         loadedDepartments = loadedDepartments.filter(d => d.leader_id === user.id);
-        // Auto-select the leader's department
+        setLeaderDepartmentCount(loadedDepartments.length);
+        
+        // Auto-select if leader has only one department
         if (loadedDepartments.length === 1 && !departmentId) {
           setDepartmentId(loadedDepartments[0].id);
         }
@@ -95,7 +98,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
         await loadPositions(schedule.department_id);
         await loadUsersForDepartment(schedule.department_id);
       } else if (isLeader && loadedDepartments.length === 1) {
-        // Auto-load for leader's department
+        // Auto-load for leader's single department
         await loadPositions(loadedDepartments[0].id);
         await loadUsersForDepartment(loadedDepartments[0].id);
       }
@@ -259,7 +262,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="department">Departamento</Label>
-            <Select value={departmentId} onValueChange={setDepartmentId} disabled={isLeader}>
+            <Select value={departmentId} onValueChange={setDepartmentId} disabled={isLeader && leaderDepartmentCount === 1}>
               <SelectTrigger id="department">
                 <SelectValue placeholder="Selecione um departamento" />
               </SelectTrigger>
