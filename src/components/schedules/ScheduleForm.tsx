@@ -80,9 +80,15 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       // Load departments
       let loadedDepartments = await db.getDepartments();
       
-      // For leaders, only show departments they lead (by leader_id)
+      // For leaders, filter to departments they lead using ledDepartmentIds from context
       if (isLeader && user?.id) {
-        loadedDepartments = loadedDepartments.filter(d => d.leader_id === user.id);
+        const ledDeptIds = user.ledDepartmentIds || [];
+        if (ledDeptIds.length > 0) {
+          loadedDepartments = loadedDepartments.filter(d => ledDeptIds.includes(d.id));
+        } else {
+          // Fallback: also check leader_id for backwards compatibility
+          loadedDepartments = loadedDepartments.filter(d => d.leader_id === user.id);
+        }
         setLeaderDepartmentCount(loadedDepartments.length);
         
         // Auto-select if leader has only one department

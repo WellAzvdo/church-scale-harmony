@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from 'react-router-dom';
-import { Shield, UserCog, Loader2, RefreshCw, Building2, Check, X } from 'lucide-react';
+import { Shield, UserCog, Loader2, RefreshCw, Building2, Check, X, Crown } from 'lucide-react';
 import { logger } from '@/lib/logger';
 
 interface UserWithRole {
@@ -40,9 +40,16 @@ interface UserWithRole {
   departmentId: string | null;
   approvalStatus: ApprovalStatus;
   assignedDepartments: string[];
+  ledDepartments: string[]; // Departments this user leads
 }
 
 interface UserDepartment {
+  id: string;
+  user_id: string;
+  department_id: string;
+}
+
+interface DepartmentLeader {
   id: string;
   user_id: string;
   department_id: string;
@@ -57,8 +64,10 @@ const UserManagement: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<AppRole>('member');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedLedDepartments, setSelectedLedDepartments] = useState<string[]>([]);
   const [isPromoteDialogOpen, setIsPromoteDialogOpen] = useState(false);
   const [isDepartmentDialogOpen, setIsDepartmentDialogOpen] = useState(false);
+  const [isLeadershipDialogOpen, setIsLeadershipDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   const { checkPermission, promoteUser } = useAuth();
@@ -107,6 +116,13 @@ const UserManagement: React.FC = () => {
         .select('*');
       
       if (deptsError) throw deptsError;
+
+      // Load department leaders
+      const { data: deptLeaders, error: leadersError } = await supabase
+        .from('department_leaders')
+        .select('*');
+      
+      if (leadersError) throw leadersError;
       
       // Combine the data
       const mappedUsers: UserWithRole[] = userRoles.map((ur) => {
@@ -114,6 +130,9 @@ const UserManagement: React.FC = () => {
         const deptIds = (userDepts as UserDepartment[] || [])
           .filter(ud => ud.user_id === ur.user_id)
           .map(ud => ud.department_id);
+        const ledDeptIds = (deptLeaders as DepartmentLeader[] || [])
+          .filter(dl => dl.user_id === ur.user_id)
+          .map(dl => dl.department_id);
         
         return {
           id: ur.user_id,
@@ -122,7 +141,8 @@ const UserManagement: React.FC = () => {
           role: ur.role as AppRole,
           departmentId: ur.department_id,
           approvalStatus: ur.approval_status as ApprovalStatus,
-          assignedDepartments: deptIds
+          assignedDepartments: deptIds,
+          ledDepartments: ledDeptIds
         };
       });
       
@@ -257,6 +277,63 @@ const UserManagement: React.FC = () => {
         : [...prev, deptId]
     );
   };
+
+  const openLeadershipDialog = (user: UserWithRole) => {
+    setSelectedUser(user);
+    setSelectedLedDepartments(user.ledDepartments || []);
+    setIsLeadershipDialogOpen(true);
+  };
+
+  const toggleLedDepartment = (deptId: string) => {
+    setSelectedLedDepartments(prev => 
+      prev.includes(deptId) 
+        ? prev.filter(id => id !== deptId)
+        : [...prev, deptId]
+    );
+  };
+
+  const handleSaveLeadership = async () => {
+    if (!selectedUser) return;
+    
+    setIsSaving(true);
+    try {
+      await db.setDepartmentLeaders(selectedUser.id, selectedLedDepartments);
+
+      // If they now lead departments, ensure their role is department_leader
+      if (selectedLedDepartments.length > 0 && selectedUser.role === 'member') {
+        await db.updateUserRole(selectedUser.id, 'department_leader', selectedLedDepartments[0]);
+      }
+      
+      // Update the user in the list
+      setUsers(current => 
+        current.map(user => 
+          user.id === selectedUser.id 
+            ? { 
+                ...user, 
+                ledDepartments: selectedLedDepartments,
+                role: selectedLedDepartments.length > 0 && user.role === 'member' ? 'department_leader' : user.role
+              } 
+            : user
+        )
+      );
+      
+      toast({
+        title: "Liderança atualizada",
+        description: `${selectedUser.fullName} agora lidera ${selectedLedDepartments.length} departamento(s).`,
+      });
+      
+      setIsLeadershipDialogOpen(false);
+    } catch (error) {
+      logger.error('Error saving leadership:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível atualizar a liderança.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
   const getRoleBadge = (role: AppRole) => {
     switch (role) {
@@ -357,13 +434,37 @@ const UserManagement: React.FC = () => {
                     <p className="text-gray-500">Função:</p>
                     <p>{getRoleLabel(user.role)}</p>
                     
-                    {user.role === 'department_leader' && (
+                    {user.role === 'department_leader' && user.ledDepartments.length === 0 && (
                       <>
                         <p className="text-gray-500">Lidera:</p>
                         <p>{getDepartmentName(user.departmentId)}</p>
                       </>
                     )}
                   </div>
+                  
+                  {/* Led departments */}
+                  {user.ledDepartments.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-2 flex items-center">
+                        <Crown className="h-3 w-3 mr-1 text-amber-500" />
+                        Departamentos que lidera:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {user.ledDepartments.map(deptId => {
+                          const dept = departments.find(d => d.id === deptId);
+                          return dept ? (
+                            <Badge 
+                              key={deptId} 
+                              className="bg-amber-100 text-amber-800 border-amber-200"
+                            >
+                              <Crown className="h-3 w-3 mr-1" />
+                              {dept.name}
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Assigned departments */}
                   <div>
@@ -391,23 +492,33 @@ const UserManagement: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2 pt-2">
                     <Button 
                       onClick={() => openDepartmentDialog(user)}
                       variant="outline"
-                      className="flex-1"
+                      size="sm"
                       disabled={user.approvalStatus !== 'approved'}
                     >
                       <Building2 className="h-4 w-4 mr-2" /> Departamentos
                     </Button>
                     {isAdmin && (
-                      <Button 
-                        onClick={() => openPromoteDialog(user)}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <UserCog className="h-4 w-4 mr-2" /> Função
-                      </Button>
+                      <>
+                        <Button 
+                          onClick={() => openLeadershipDialog(user)}
+                          variant="outline"
+                          size="sm"
+                          disabled={user.approvalStatus !== 'approved'}
+                        >
+                          <Crown className="h-4 w-4 mr-2" /> Liderança
+                        </Button>
+                        <Button 
+                          onClick={() => openPromoteDialog(user)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <UserCog className="h-4 w-4 mr-2" /> Função
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -512,6 +623,56 @@ const UserManagement: React.FC = () => {
               Cancelar
             </Button>
             <Button onClick={handleSaveDepartments} disabled={isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Leadership Assignment Dialog */}
+      <Dialog open={isLeadershipDialogOpen} onOpenChange={setIsLeadershipDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <Crown className="h-5 w-5 mr-2 text-amber-500" />
+              Atribuir Liderança
+            </DialogTitle>
+            <DialogDescription>
+              Selecione os departamentos que {selectedUser?.fullName} irá liderar.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4 max-h-[300px] overflow-y-auto">
+            {departments.map(dept => (
+              <div 
+                key={dept.id} 
+                className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
+                onClick={() => toggleLedDepartment(dept.id)}
+              >
+                <Checkbox 
+                  checked={selectedLedDepartments.includes(dept.id)}
+                  onCheckedChange={() => toggleLedDepartment(dept.id)}
+                />
+                <div className="flex-1">
+                  <p className="font-medium">{dept.name}</p>
+                  {dept.description && (
+                    <p className="text-sm text-muted-foreground">{dept.description}</p>
+                  )}
+                </div>
+                <div 
+                  className="w-4 h-4 rounded-full" 
+                  style={{ backgroundColor: dept.color || 'hsl(var(--primary))' }}
+                />
+              </div>
+            ))}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLeadershipDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveLeadership} disabled={isSaving}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Salvar
             </Button>

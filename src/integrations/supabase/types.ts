@@ -111,6 +111,35 @@ export type Database = {
         }
         Relationships: []
       }
+      department_leaders: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_leaders_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           color: string | null
@@ -475,6 +504,7 @@ export type Database = {
         }
         Returns: string
       }
+      get_led_departments: { Args: { _user_id: string }; Returns: string[] }
       get_user_approval_status: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["approval_status"]
@@ -484,6 +514,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_department_leader: {
+        Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
       is_user_in_leader_department: {

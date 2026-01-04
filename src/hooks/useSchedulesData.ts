@@ -8,6 +8,7 @@ interface AuthUser {
   id: string;
   role: AppRole;
   departmentId: string | null;
+  ledDepartmentIds?: string[];
   memberId: string | null;
 }
 
@@ -52,16 +53,24 @@ export const useSchedulesData = (selectedDate: Date, currentUser: AuthUser | nul
       
       // Apply user role-based filtering
       if (currentUser) {
-        if (currentUser.role === 'member' && currentUser.memberId) {
-          // Members can only see their own schedules (memberId here refers to profile.id)
+        if (currentUser.role === 'member') {
+          // Members can only see their own schedules
           allSchedules = allSchedules.filter(
             schedule => schedule.member_id === currentUser.id
           );
-        } else if (currentUser.role === 'department_leader' && currentUser.departmentId) {
-          // Department leaders can only see schedules for their department
-          allSchedules = allSchedules.filter(
-            schedule => schedule.department_id === currentUser.departmentId
-          );
+        } else if (currentUser.role === 'department_leader') {
+          // Department leaders can see schedules for ALL departments they lead
+          const ledDeptIds = currentUser.ledDepartmentIds || [];
+          if (ledDeptIds.length > 0) {
+            allSchedules = allSchedules.filter(
+              schedule => ledDeptIds.includes(schedule.department_id)
+            );
+          } else if (currentUser.departmentId) {
+            // Fallback to single departmentId for backwards compatibility
+            allSchedules = allSchedules.filter(
+              schedule => schedule.department_id === currentUser.departmentId
+            );
+          }
         }
         // Admins can see all schedules, so no filtering needed
       }

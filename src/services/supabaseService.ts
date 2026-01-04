@@ -697,6 +697,70 @@ export async function getMembersInUserDepartments(userId: string): Promise<Membe
   return members || [];
 }
 
+// ============= DEPARTMENT LEADERS =============
+
+export async function getLedDepartments(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('department_leaders')
+    .select('department_id')
+    .eq('user_id', userId);
+  
+  if (error) throw error;
+  return data?.map(d => d.department_id) || [];
+}
+
+export async function addDepartmentLeader(departmentId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('department_leaders')
+    .insert({ department_id: departmentId, user_id: userId });
+  
+  if (error && !error.message.includes('duplicate')) throw error;
+}
+
+export async function removeDepartmentLeader(departmentId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('department_leaders')
+    .delete()
+    .eq('department_id', departmentId)
+    .eq('user_id', userId);
+  
+  if (error) throw error;
+}
+
+export async function setDepartmentLeaders(userId: string, departmentIds: string[]): Promise<void> {
+  // Delete existing leadership assignments for this user
+  const { error: deleteError } = await supabase
+    .from('department_leaders')
+    .delete()
+    .eq('user_id', userId);
+  
+  if (deleteError) throw deleteError;
+  
+  // Insert new leadership assignments
+  if (departmentIds.length > 0) {
+    const inserts = departmentIds.map(deptId => ({
+      user_id: userId,
+      department_id: deptId
+    }));
+    
+    const { error: insertError } = await supabase
+      .from('department_leaders')
+      .insert(inserts);
+    
+    if (insertError) throw insertError;
+  }
+}
+
+export async function getDepartmentLeaders(departmentId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('department_leaders')
+    .select('user_id')
+    .eq('department_id', departmentId);
+  
+  if (error) throw error;
+  return data?.map(d => d.user_id) || [];
+}
+
 // ============= CHURCH SETTINGS =============
 
 export async function getChurchSettings(): Promise<{

@@ -13,6 +13,7 @@ interface AuthUser {
   fullName: string;
   role: AppRole;
   departmentId: string | null;
+  ledDepartmentIds: string[]; // All departments this user leads
   approvalStatus: ApprovalStatus;
   memberId: string | null;
 }
@@ -83,9 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load user data from profile and role
   const loadUserData = async (supabaseUser: User): Promise<AuthUser | null> => {
     try {
-      const [profile, userRole] = await Promise.all([
+      const [profile, userRole, ledDepartments] = await Promise.all([
         db.getProfile(supabaseUser.id),
-        db.getUserRole(supabaseUser.id)
+        db.getUserRole(supabaseUser.id),
+        db.getLedDepartments(supabaseUser.id)
       ]);
 
       if (!profile || !userRole) {
@@ -99,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fullName: profile.full_name,
         role: userRole.role,
         departmentId: userRole.department_id,
+        ledDepartmentIds: ledDepartments,
         approvalStatus: userRole.approval_status,
         memberId: profile.member_id
       };
