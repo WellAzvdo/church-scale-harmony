@@ -17,8 +17,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <div className="flex items-center justify-center h-screen">Carregando...</div>;
   }
   
-  // If user is logged in but pending approval, redirect to pending page
-  if (user && user.approvalStatus === 'pending') {
+  // If user is logged in but email not confirmed or pending approval, redirect to pending page
+  if (user && (!user.emailConfirmed || user.approvalStatus === 'pending')) {
     return <Navigate to="/aguardando-aprovacao" replace />;
   }
   

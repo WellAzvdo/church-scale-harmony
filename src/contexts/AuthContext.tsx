@@ -16,6 +16,7 @@ interface AuthUser {
   ledDepartmentIds: string[]; // All departments this user leads
   approvalStatus: ApprovalStatus;
   memberId: string | null;
+  emailConfirmed: boolean; // Whether email has been confirmed
 }
 
 interface AuthContextType {
@@ -95,6 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
+      // Check if email is confirmed from the session user data
+      const emailConfirmed = !!supabaseUser.email_confirmed_at;
+
       return {
         id: supabaseUser.id,
         email: supabaseUser.email || '',
@@ -103,7 +107,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         departmentId: userRole.department_id,
         ledDepartmentIds: ledDepartments,
         approvalStatus: userRole.approval_status,
-        memberId: profile.member_id
+        memberId: profile.member_id,
+        emailConfirmed
       };
     } catch (error) {
       logger.error('Error loading user data:', error);
@@ -262,12 +267,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        // Sign out immediately - user needs approval
+        // Sign out immediately - user needs email confirmation and approval
         await supabase.auth.signOut();
         
         toast({
           title: "Cadastro realizado",
-          description: "Sua conta foi criada e está aguardando aprovação de um administrador.",
+          description: "Verifique seu e-mail para confirmar sua conta. Após confirmação, aguarde aprovação de um administrador.",
         });
         return true;
       }
@@ -391,7 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       user,
       session,
-      isAuthenticated: !!user && user.approvalStatus === 'approved',
+      isAuthenticated: !!user && user.approvalStatus === 'approved' && user.emailConfirmed,
       isLoading,
       login,
       logout,
