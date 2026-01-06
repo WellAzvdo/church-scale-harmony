@@ -24,6 +24,7 @@ import * as db from '@/services/supabaseService';
 import { format } from 'date-fns';
 import { logger } from '@/lib/logger';
 import { useAuth, Permission } from '@/contexts/AuthContext';
+import { formatDateForDisplay } from '@/lib/dateUtils';
 
 interface ScheduleFormProps {
   schedule: Schedule | null;
@@ -174,7 +175,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({
       if (hasConflict && conflictDepartment) {
         const selectedUser = availableUsers.find(u => u.id === memberId);
         setConflictWarning(
-          `⚠️ Atenção: ${selectedUser?.full_name || 'Este membro'} já está escalado no departamento ${conflictDepartment.name} no dia ${new Date(formattedDate).toLocaleDateString('pt-BR')}.`
+          `⚠️ Atenção: ${selectedUser?.full_name || 'Este membro'} já está escalado no departamento ${conflictDepartment.name} no dia ${formatDateForDisplay(formattedDate)}.`
         );
       } else {
         setConflictWarning(null);

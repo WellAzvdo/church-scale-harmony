@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Schedule, Department, Position, Profile } from '@/lib/database.types';
+import { parseLocalDate } from '@/lib/dateUtils';
 
 interface SchedulesListProps {
   schedules: Schedule[];
@@ -85,7 +86,7 @@ const SchedulesList: React.FC<SchedulesListProps> = ({
                             <p className="text-sm text-primary font-medium">{position.name}</p>
                           )}
                           <p className="text-sm text-muted-foreground">
-                            {new Date(schedule.date).toLocaleDateString('pt-BR')}
+                            {parseLocalDate(schedule.date).toLocaleDateString('pt-BR')}
                           </p>
                           {schedule.notes && (
                             <p className="text-xs italic mt-1">{schedule.notes}</p>
