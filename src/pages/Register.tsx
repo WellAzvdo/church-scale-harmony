@@ -65,7 +65,7 @@ const Register: React.FC = () => {
       if (success) {
         navigate('/login', { 
           state: { 
-            message: "Conta criada com sucesso. Aguarde a aprovação de um administrador." 
+            message: "Conta criada com sucesso. Verifique seu e-mail para confirmar sua conta." 
           }
         });
       }
