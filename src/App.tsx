@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import React, { useEffect } from "react";
 import { processSchedulesForNotifications, initializeNotifications } from "./services/NotificationService";
+import PWAInstallGate from "./components/pwa/PWAInstallGate";
 
 // Pages
 import Index from "./pages/Index";
@@ -48,72 +49,74 @@ const App = () => {
   return (
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/acesso-negado" element={<AccessDenied />} />
-                <Route path="/aguardando-aprovacao" element={<PendingApproval />} />
-                
-                <Route path="/" element={<AppLayout />}>
-                  <Route path="/members" element={
-                    <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
-                      <Members />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/departments" element={
-                    <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
-                      <Departments />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/schedules" element={
-                    <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
-                      <Schedules />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/settings" element={
-                    <ProtectedRoute requiredPermission={Permission.MANAGE_ALL}>
-                      <Settings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/profile" element={
-                    <ProtectedRoute requiredPermission={Permission.VIEW_PERSONAL_SETTINGS}>
-                      <UserSettings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/user-approval" element={
-                    <ProtectedRoute requiredPermission={Permission.APPROVE_USERS}>
-                      <UserApproval />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/user-management" element={
-                    <ProtectedRoute requiredPermission={Permission.MANAGE_USER_ROLES}>
-                      <UserManagement />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/checkin" element={
-                    <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
-                      <CheckIn />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/checkin-report" element={
-                    <ProtectedRoute requiredPermission={Permission.MANAGE_DEPARTMENT_SCHEDULES}>
-                      <CheckInReport />
-                    </ProtectedRoute>
-                  } />
-                </Route>
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </TooltipProvider>
-          </AuthProvider>
-        </BrowserRouter>
+        <PWAInstallGate>
+          <BrowserRouter>
+            <AuthProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/acesso-negado" element={<AccessDenied />} />
+                  <Route path="/aguardando-aprovacao" element={<PendingApproval />} />
+                  
+                  <Route path="/" element={<AppLayout />}>
+                    <Route path="/members" element={
+                      <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
+                        <Members />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/departments" element={
+                      <ProtectedRoute requiredPermission={Permission.VIEW_ALL}>
+                        <Departments />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/schedules" element={
+                      <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
+                        <Schedules />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/settings" element={
+                      <ProtectedRoute requiredPermission={Permission.MANAGE_ALL}>
+                        <Settings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/profile" element={
+                      <ProtectedRoute requiredPermission={Permission.VIEW_PERSONAL_SETTINGS}>
+                        <UserSettings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/user-approval" element={
+                      <ProtectedRoute requiredPermission={Permission.APPROVE_USERS}>
+                        <UserApproval />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/user-management" element={
+                      <ProtectedRoute requiredPermission={Permission.MANAGE_USER_ROLES}>
+                        <UserManagement />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/checkin" element={
+                      <ProtectedRoute requiredPermission={Permission.VIEW_OWN_SCHEDULES}>
+                        <CheckIn />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/checkin-report" element={
+                      <ProtectedRoute requiredPermission={Permission.MANAGE_DEPARTMENT_SCHEDULES}>
+                        <CheckInReport />
+                      </ProtectedRoute>
+                    } />
+                  </Route>
+                  
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </TooltipProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </PWAInstallGate>
       </QueryClientProvider>
     </React.StrictMode>
   );

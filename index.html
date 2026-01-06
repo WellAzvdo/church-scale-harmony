@@ -5,11 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Igreja App" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#3a7ca5" />
     <title>Igreja App - Escalas</title>
     <meta name="description" content="Sistema de gerenciamento de escalas para igrejas" />
     <meta name="author" content="Igreja App" />
+
+    <!-- PWA Icons -->
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png" />
 
     <meta property="og:title" content="Igreja App - Escalas" />
     <meta property="og:description" content="Sistema de gerenciamento de escalas para igrejas" />
@@ -19,6 +25,18 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <!-- PWA Styles for standalone mode -->
+    <style>
+      @media all and (display-mode: standalone) {
+        body {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          overscroll-behavior: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
